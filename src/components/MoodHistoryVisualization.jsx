@@ -417,19 +417,20 @@ const MoodHistoryVisualization = () => {
     const getItemSize = () => {
       switch (timeRange) {
         case 'week':
+          return 38; // Increased size for week view
         case 'month':
-          return 30; // Slightly reduced from 32 to ensure it fits properly
+          return 34; // Increased size for month view  
         case 'year':
-          return 16; // Medium for year view
+          return 20; // Increased size for year view
         case 'all':
-          return 8;  // Smallest for all view
+          return 12; // Increased size for all view
         default:
-          return 25; // Default fallback
+          return 34; // Default fallback
       }
     };
     
     const fixedItemSize = getItemSize();
-    const fixedGap = Math.max(Math.min(fixedItemSize * 0.15, 8), 4); // Gap scales with item size, capped between 4-8px
+    const fixedGap = Math.max(Math.min(fixedItemSize * 0.15, 8), 4); // Original gap calculation
 
     return (
       <div className="w-full py-2 animate-fade-in">
@@ -441,7 +442,7 @@ const MoodHistoryVisualization = () => {
               gridTemplateRows: `repeat(${fixedRows}, 1fr)`,
               gap: `${fixedGap}px`, 
               width: '100%',
-              height: timeRange === 'week' || timeRange === 'month' ? '350px' : '320px' // Taller for week/month views
+              height: timeRange === 'week' ? '380px' : timeRange === 'month' ? '360px' : '320px' // Increased heights
             }}
           >
             {/* Render empty placeholders to maintain grid size */}
@@ -605,18 +606,6 @@ const MoodHistoryVisualization = () => {
             <h1 className="text-2xl font-semibold tracking-tight font-cooper">Mood History</h1>
             <p className="text-sm text-secondary mt-0.5">Your emotional journey</p>
           </div>
-          <nav className="flex items-center space-x-3">
-            <Link href="/mood-tracking" className="p-2 text-foreground hover:text-[#5A5A58] transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
-            </Link>
-            <div className="p-2 text-foreground cursor-pointer hover:text-[#5A5A58] transition-colors" onClick={() => generateTestData(50)}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </div>
-          </nav>
         </header>
         
         {/* Control Panel - View Switcher & Time Controls */}
@@ -712,50 +701,6 @@ const MoodHistoryVisualization = () => {
         ) : (
           viewType === 'calendar' ? renderCalendarView() : renderGridView()
         )}
-        
-        {/* Developer Tool */}
-        <div className="mt-4 mb-6 glass-card p-3 animate-scale-in">
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-medium text-secondary">Developer Tools</h3>
-              <button 
-                onClick={() => {
-                  localStorage.removeItem('moodEntries');
-                  loadMoodData();
-                }}
-                className="text-xs text-red-500 hover:underline"
-              >
-                Clear All
-              </button>
-            </div>
-            <div className="flex space-x-2">
-              <button 
-                onClick={() => generateTestData(10)}
-                className="py-1 px-3 text-xs bg-muted hover:bg-muted/80 rounded-full"
-              >
-                10 Records
-              </button>
-              <button 
-                onClick={() => generateTestData(50)}
-                className="py-1 px-3 text-xs bg-muted hover:bg-muted/80 rounded-full"
-              >
-                50 Records
-              </button>
-              <button 
-                onClick={() => generateTestData(100)}
-                className="py-1 px-3 text-xs bg-muted hover:bg-muted/80 rounded-full"
-              >
-                100 Records
-              </button>
-              <button 
-                onClick={() => generateTestData(200)}
-                className="py-1 px-3 text-xs bg-muted hover:bg-muted/80 rounded-full"
-              >
-                200 Records
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
       
       {/* Fixed bottom navbar - improved design */}

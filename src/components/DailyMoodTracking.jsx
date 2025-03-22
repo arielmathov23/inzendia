@@ -192,6 +192,9 @@ const DailyMoodTracking = () => {
   const [activeSelection, setActiveSelection] = useState(null);
   const [confirmProgress, setConfirmProgress] = useState(0);
   const [confirmationAnimating, setConfirmationAnimating] = useState(false);
+  const [moodReason, setMoodReason] = useState('');
+  const [showReasonInput, setShowReasonInput] = useState(false);
+  const [selectedMood, setSelectedMood] = useState(null);
   const holdTimerRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const router = useRouter();
@@ -275,10 +278,15 @@ const DailyMoodTracking = () => {
 
   const completeMoodSelection = (mood) => {
     setConfirmationAnimating(true);
-    
-    // Create the entry
+    setSelectedMood(mood);
+    setShowReasonInput(true);
+  };
+
+  const saveMoodEntry = () => {
+    // Create the entry with mood and reason
     const entry = {
-      mood: mood,
+      mood: selectedMood,
+      reason: moodReason.trim() || `No reason specified`,
       date: new Date().toISOString()
     };
     
@@ -301,10 +309,11 @@ const DailyMoodTracking = () => {
       
       // Set mood and trigger animation
       setTimeout(() => {
-        setTodaysMood(mood);
+        setTodaysMood(selectedMood);
         setSubmittedToday(true);
         setActiveSelection(null);
         setConfirmProgress(0);
+        setShowReasonInput(false);
         
         // Reset confirmation state after animation
         setTimeout(() => {
@@ -315,6 +324,7 @@ const DailyMoodTracking = () => {
       console.error('Error saving mood:', error);
       setActiveSelection(null);
       setConfirmProgress(0);
+      setShowReasonInput(false);
     }
   };
 
@@ -347,6 +357,8 @@ const DailyMoodTracking = () => {
       setTodaysMood(null);
       setCompletedExercise(false);
       setTapCount(0);
+      setMoodReason('');
+      setShowReasonInput(false);
       
       // Close breathing modal if open
       if (showBreathingExercise) {
@@ -547,15 +559,13 @@ const DailyMoodTracking = () => {
           </div>
           <button
             onClick={handleResetData}
-            className="text-[#0C0907] hover:text-[#778D5E] p-2 rounded-full transition-colors"
-            title="Reset today's mood (for testing)"
+            className="text-[#DA7A59] hover:text-[#DA7A59]/80 p-2 rounded-full transition-colors"
+            title="Developer tool: reset data"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 0 1-9 9"></path>
-              <path d="M3 12a9 9 0 0 1 9-9"></path>
-              <path d="M21 12a9 9 0 0 0-9-9"></path>
-              <path d="M3 12a9 9 0 0 0 9 9"></path>
-              <path d="M12 7v4"></path>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="opacity-75">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
             </svg>
           </button>
         </header>
@@ -677,8 +687,25 @@ const DailyMoodTracking = () => {
                           transform: confirmationAnimating ? 'translateY(10px)' : 'translateY(0)'
                         }}
                       >
+                        {/* Display the user's reason if available */}
                         <span className="text-[#5A5A58] font-medium font-cooper tracking-wide text-[15px] relative inline-block">
-                          Return tomorrow to continue
+                          {(() => {
+                            try {
+                              const entries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+                              const today = new Date().setHours(0, 0, 0, 0);
+                              const todayEntry = entries.find(entry => {
+                                const entryDate = new Date(entry.date).setHours(0, 0, 0, 0);
+                                return entryDate === today;
+                              });
+                              
+                              if (todayEntry && todayEntry.reason) {
+                                return todayEntry.reason;
+                              }
+                              return "Return tomorrow to continue";
+                            } catch (error) {
+                              return "Return tomorrow to continue";
+                            }
+                          })()}
                           <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#5A5A58]/30 rounded-full"></span>
                         </span>
                       </div>
@@ -686,7 +713,7 @@ const DailyMoodTracking = () => {
                   </div>
                 </div>
                 
-                {/* Breathing Exercise Card - PROPERLY INTEGRATED DESIGN */}
+                {/* Breathing Exercise Card */}
                 <div 
                   className="bg-[#8A8BDE] rounded-xl p-6 relative z-10 overflow-hidden transition-all duration-300 cursor-pointer mt-4"
                   style={{ 
@@ -723,8 +750,8 @@ const DailyMoodTracking = () => {
                           ? "Exercise completed today" 
                           : "Tap 4 times for calm & focus"
                         }
-                  </p>
-                </div>
+                      </p>
+                    </div>
                     <div className="flex flex-col items-center">
                       {completedExercise ? (
                         <div className="bg-white/20 rounded-full p-1.5">
@@ -911,6 +938,60 @@ const DailyMoodTracking = () => {
           </Link>
         </div>
       </div>
+
+      {/* Reason Input Overlay */}
+      {showReasonInput && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-[#0C0907]/60 animate-fade-in">
+          <div className="w-full max-w-md bg-[#F7F6F3] rounded-xl p-6 shadow-lg">
+            <h3 className="text-2xl font-cooper text-[#0C0907] mb-4">Why do you feel {selectedMood?.label.toLowerCase()}?</h3>
+            
+            <div className="mb-5">
+              <textarea
+                placeholder="Share why you're feeling this way... (i.e. work stress, quality time with friends, got enough sleep)"
+                className="w-full h-24 p-3 border border-[#E5E4E0] rounded-lg bg-white focus:ring-2 focus:ring-[#8A8BDE] focus:outline-none font-medium text-[#0C0907]"
+                value={moodReason}
+                onChange={(e) => setMoodReason(e.target.value)}
+              ></textarea>
+            </div>
+            
+            <div className="mb-5">
+              <p className="text-sm text-[#0C0907]/60 mb-2">Suggested topics:</p>
+              <div className="flex flex-wrap gap-2">
+                {['Work', 'Relationships', 'Health', 'Sleep', 'Exercise', 'Weather', 'Food', 'Family'].map(topic => (
+                  <button
+                    key={topic}
+                    className="px-3 py-1 bg-[#8A8BDE]/10 text-[#8A8BDE] rounded-full text-sm hover:bg-[#8A8BDE]/20 transition-colors"
+                    onClick={() => setMoodReason(prev => prev ? `${prev}, ${topic.toLowerCase()}` : topic.toLowerCase())}
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 text-[#0C0907]/60 rounded-md hover:bg-[#0C0907]/5 transition-colors"
+                onClick={() => {
+                  setMoodReason('');
+                  setShowReasonInput(false);
+                  setSelectedMood(null);
+                  setActiveSelection(null);
+                  setConfirmProgress(0);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-6 py-2 bg-[#8A8BDE] text-white rounded-md hover:bg-[#8A8BDE]/90 transition-colors"
+                onClick={saveMoodEntry}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Breathing Exercise Modal - IMPROVED DESIGN */}
       {showBreathingExercise && (

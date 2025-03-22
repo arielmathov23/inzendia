@@ -208,7 +208,6 @@ const MoodInsights = () => {
                     background: `conic-gradient(#DA7A59 0% ${distribution.low}%, #D9C69C ${distribution.low}% ${distribution.low + distribution.neutral}%, #778D5E ${distribution.low + distribution.neutral}% 100%)` 
                   }}>
                   <div className="w-12 h-12 bg-[#F0EFEB] flex items-center justify-center irregular-blob">
-                    <span className="text-2xl font-cooper">{avgMoodValue}</span>
                   </div>
                 </div>
                 <div className="ml-6">
@@ -281,10 +280,6 @@ const MoodInsights = () => {
             </div>
           </div>
         </div>
-        
-        <div className="text-center text-base text-[#0C0907]/70">
-          Showing insights based on {filteredEntries.length} days of mood data
-        </div>
       </div>
     );
   };
@@ -309,27 +304,6 @@ const MoodInsights = () => {
         ) : (
           moodEntries.length === 0 ? renderEmptyState() : renderInsights()
         )}
-
-        {/* Development tool to erase data */}
-        <div className="mt-10 pt-6 border-t border-[#0C0907]/10 flex justify-center">
-          <button 
-            onClick={() => {
-              if (window.confirm('Are you sure you want to erase all mood data? This cannot be undone.')) {
-                localStorage.removeItem('moodEntries');
-                setMoodEntries([]);
-                alert('All mood data has been erased.');
-              }
-            }}
-            className="flex items-center py-2 px-4 text-[#0C0907]/40 hover:text-[#DA7A59] rounded-md transition-colors text-sm font-medium"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DA7A59" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 opacity-70">
-              <path d="M3 6h18"></path>
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-            </svg>
-            Reset All Mood Data
-          </button>
-        </div>
       </div>
       
       {/* Updated bottom nav bar with improved design */}
