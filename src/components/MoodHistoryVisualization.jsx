@@ -367,25 +367,34 @@ const MoodHistoryVisualization = () => {
           </div>
         </div>
         
-        {/* Selected day mood details */}
+        {/* Mood Details Popup - Calendar View */}
         {selectedMoodEntry && (
-          <div className="glass-card p-4 animate-scale-in">
-            <div className="flex items-center space-x-4">
-              <div 
-                className={`w-12 h-12 ${getBlobClass(selectedMoodEntry.mood)} animate-float`}
-                style={{ backgroundColor: getMoodColor(selectedMoodEntry.mood) }}
-              ></div>
-              <div>
-                <h3 className="text-base font-medium font-cooper">{formatDate(selectedMoodEntry.date, 'long')}</h3>
-                <p className="text-secondary text-sm">Mood: {selectedMoodEntry.mood.label}</p>
+          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-black/30 animate-fade-in">
+            <div className="w-full max-w-xs bg-white rounded-2xl p-6 shadow-xl animate-scale-in">
+              <div className="flex items-center mb-4">
+                <div 
+                  className={`w-12 h-12 ${getBlobClass(selectedMoodEntry.mood)} animate-float`}
+                  style={{ backgroundColor: getMoodColor(selectedMoodEntry.mood) }}
+                ></div>
+                <div className="ml-4">
+                  <h3 className="text-base font-medium font-cooper">{formatDate(selectedMoodEntry.date, 'long')}</h3>
+                  <p className="text-secondary text-sm">Mood: {selectedMoodEntry.mood.label}</p>
+                </div>
               </div>
+              
+              {selectedMoodEntry.reason && (
+                <div className="mb-4 bg-[#F0EFEB] rounded-xl p-4">
+                  <p className="text-sm text-[#0C0907]/80 italic">"{selectedMoodEntry.reason}"</p>
+                </div>
+              )}
+              
+              <button 
+                onClick={() => setSelectedMoodEntry(null)}
+                className="w-full py-2 mt-2 text-center bg-[#F0EFEB] text-[#5A5A58] rounded-lg hover:bg-[#E5E4E0] transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
             </div>
-            <button 
-              onClick={() => setSelectedMoodEntry(null)}
-              className="mt-3 text-[#5A5A58] text-xs hover:underline"
-            >
-              Close
-            </button>
           </div>
         )}
       </div>
@@ -512,25 +521,34 @@ const MoodHistoryVisualization = () => {
           </div>
         </div>
         
-        {/* Selected day mood details */}
+        {/* Mood Details Popup - Grid View */}
         {selectedMoodEntry && (
-          <div className="glass-card p-4 animate-scale-in">
-            <div className="flex items-center space-x-4">
-              <div 
-                className={`w-12 h-12 ${getBlobClass(selectedMoodEntry.mood)} animate-float`}
-                style={{ backgroundColor: getMoodColor(selectedMoodEntry.mood) }}
-              ></div>
-              <div>
-                <h3 className="text-base font-medium font-cooper">{formatDate(selectedMoodEntry.date, 'long')}</h3>
-                <p className="text-secondary text-sm">Mood: {selectedMoodEntry.mood.label}</p>
+          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-black/30 animate-fade-in">
+            <div className="w-full max-w-xs bg-white rounded-2xl p-6 shadow-xl animate-scale-in">
+              <div className="flex items-center mb-4">
+                <div 
+                  className={`w-12 h-12 ${getBlobClass(selectedMoodEntry.mood)} animate-float`}
+                  style={{ backgroundColor: getMoodColor(selectedMoodEntry.mood) }}
+                ></div>
+                <div className="ml-4">
+                  <h3 className="text-base font-medium font-cooper">{formatDate(selectedMoodEntry.date, 'long')}</h3>
+                  <p className="text-secondary text-sm">Mood: {selectedMoodEntry.mood.label}</p>
+                </div>
               </div>
+              
+              {selectedMoodEntry.reason && (
+                <div className="mb-4 bg-[#F0EFEB] rounded-xl p-4">
+                  <p className="text-sm text-[#0C0907]/80 italic">"{selectedMoodEntry.reason}"</p>
+                </div>
+              )}
+              
+              <button 
+                onClick={() => setSelectedMoodEntry(null)}
+                className="w-full py-2 mt-2 text-center bg-[#F0EFEB] text-[#5A5A58] rounded-lg hover:bg-[#E5E4E0] transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
             </div>
-            <button 
-              onClick={() => setSelectedMoodEntry(null)}
-              className="mt-3 text-[#5A5A58] text-xs hover:underline"
-            >
-              Close
-            </button>
           </div>
         )}
       </div>
