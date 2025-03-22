@@ -309,6 +309,27 @@ const MoodInsights = () => {
         ) : (
           moodEntries.length === 0 ? renderEmptyState() : renderInsights()
         )}
+
+        {/* Development tool to erase data */}
+        <div className="mt-10 pt-6 border-t border-[#0C0907]/10 flex justify-center">
+          <button 
+            onClick={() => {
+              if (window.confirm('Are you sure you want to erase all mood data? This cannot be undone.')) {
+                localStorage.removeItem('moodEntries');
+                setMoodEntries([]);
+                alert('All mood data has been erased.');
+              }
+            }}
+            className="flex items-center py-2 px-4 text-[#0C0907]/40 hover:text-[#DA7A59]/90 rounded-md transition-colors text-sm font-medium"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+            Reset All Mood Data
+          </button>
+        </div>
       </div>
       
       {/* Updated bottom nav bar with improved design */}
