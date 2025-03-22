@@ -1,10 +1,10 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'inzendia | Mood Tracking',
+  title: 'Pirca | Mood Tracking',
   description: 'Track your daily mood with a beautiful, minimalist interface',
   appleWebApp: {
-    title: 'inzendia',
+    title: 'Pirca',
     statusBarStyle: 'default',
     startupImage: [
       '/apple-splash.png',
