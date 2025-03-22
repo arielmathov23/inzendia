@@ -535,22 +535,22 @@ const DailyMoodTracking = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-6 pb-24" style={{ backgroundColor: '#E5E4E0' }}>
+    <div className="flex flex-col items-center justify-start min-h-screen p-4 pb-20 sm:p-6" style={{ backgroundColor: '#E5E4E0' }}>
       {/* Custom animations */}
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
       
       <div className="w-full max-w-md">
-        <header className="mb-6 flex justify-between items-center">
+        <header className="mb-4 sm:mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Daily Mood Tracking</h1>
-            <p className="text-base text-[#0C0907]/70 mt-1">{formatDate()}</p>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Daily Mood Tracking</h1>
+            <p className="text-sm sm:text-base text-[#0C0907]/70 mt-1">{formatDate()}</p>
           </div>
           <button
             onClick={handleResetData}
             className="text-[#0C0907] hover:text-[#778D5E] p-2 rounded-full transition-colors"
             title="Reset today's mood (for testing)"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12a9 9 0 0 1-9 9"></path>
               <path d="M3 12a9 9 0 0 1 9-9"></path>
               <path d="M21 12a9 9 0 0 0-9-9"></path>
@@ -757,77 +757,104 @@ const DailyMoodTracking = () => {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Selection UI for submitting mood */}
-                {!submittedToday && !loading && (
-                  <>
-                    <div className="mb-4 mt-1 w-full">
-                      <div 
-                        className="w-full h-2 rounded-full overflow-hidden"
-                        style={{
-                          background: 'linear-gradient(to right, #DA7A59, #D9C69C, #778D5E)'
-                        }}
-                      ></div>
-                    </div>
-                    
-                    <div className="bg-[#F0EFEB] rounded-xl p-5 mb-4 w-full">
-                      <h2 className="text-2xl font-medium text-center mb-2 font-cooper">How are you feeling today?</h2>
-                      <p className="text-center text-[#0C0907]/70 mb-4 text-sm">Press and hold to confirm your selection</p>
+                <div 
+                  className="rounded-xl mb-4 sm:mb-6 p-5 sm:p-6 text-center"
+                  style={{ backgroundColor: '#F0EFEB' }}
+                >
+                  <h2 className="text-xl sm:text-2xl font-medium mb-3 font-cooper">How are you feeling today?</h2>
+                  <p className="text-sm sm:text-base text-[#0C0907]/70">Press and hold to confirm your selection</p>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  {moods.map((mood) => (
+                    <div
+                      key={mood.value}
+                      className={`rounded-xl mb-3 sm:mb-4 overflow-hidden p-4 sm:p-5 relative cursor-pointer transition-transform duration-200 ${activeSelection?.value === mood.value ? 'transform scale-[1.02]' : 'hover:transform hover:scale-[1.01]'}`}
+                      style={{ backgroundColor: '#F0EFEB' }}
+                      onMouseDown={() => startHoldConfirmation(mood)}
+                      onTouchStart={() => startHoldConfirmation(mood)}
+                      onMouseUp={cancelHoldConfirmation}
+                      onMouseLeave={cancelHoldConfirmation}
+                      onTouchEnd={cancelHoldConfirmation}
+                      onTouchCancel={cancelHoldConfirmation}
+                    >
+                      {/* Progress bar for hold confirmation */}
+                      {activeSelection?.value === mood.value && (
+                        <div 
+                          className="absolute bottom-0 left-0 h-1 transition-all ease-out"
+                          style={{ 
+                            width: `${confirmProgress}%`, 
+                            backgroundColor: mood.color,
+                            zIndex: 5,
+                          }}
+                        ></div>
+                      )}
                       
-                      <div className="space-y-2.5">
-                        {moods.map(mood => (
-                          <div 
-                            key={mood.value}
-                            className={`${
-                              activeSelection?.value === mood.value 
-                              ? 'bg-white shadow-lg' 
-                              : 'bg-white/60 hover:bg-white/80'
-                            } rounded-xl p-3 flex items-center transition-all cursor-pointer relative overflow-hidden`}
-                            onMouseDown={() => startHoldConfirmation(mood)}
-                            onTouchStart={() => startHoldConfirmation(mood)}
-                            onMouseUp={cancelHoldConfirmation}
-                            onTouchEnd={cancelHoldConfirmation}
-                            onMouseLeave={cancelHoldConfirmation}
+                      {/* Ripple background animation */}
+                      {activeSelection?.value === mood.value && (
+                        <div className="absolute inset-0 overflow-hidden">
+                          <div className="absolute w-full h-full animate-ripple" style={{ 
+                            backgroundColor: mood.color,
+                            opacity: 0.05,
+                            borderRadius: '50%',
+                            transformOrigin: 'center',
+                          }}></div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center relative z-10">
+                        <div 
+                          className={`w-14 h-14 mr-4 transition-all duration-300 flex items-center justify-center shadow-md relative ${mood.value === 3 ? 'irregular-blob-high' : mood.value === 2 ? 'irregular-blob-neutral' : 'irregular-blob-low'} ${activeSelection?.value === mood.value ? 'scale-110' : 'scale-100'}`} 
+                          style={{ backgroundColor: mood.color }}
+                        >
+                          {/* Pulse animation */}
+                          {activeSelection?.value === mood.value && (
+                            <div className={`absolute inset-0 animate-ping ${mood.value === 3 ? 'irregular-blob-high' : mood.value === 2 ? 'irregular-blob-neutral' : 'irregular-blob-low'}`} style={{ 
+                              backgroundColor: mood.color,
+                              opacity: 0.3
+                            }}></div>
+                          )}
+                          
+                          {/* Check mark that appears during hold */}
+                          {activeSelection?.value === mood.value && confirmProgress > 50 && (
+                            <svg 
+                              xmlns="http://www.w3.org/2000/svg" 
+                              className="h-6 w-6 text-white animate-scale-in" 
+                              fill="none" 
+                              viewBox="0 0 24 24" 
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="text-left flex-1">
+                          <span className="text-xl font-medium text-[#0C0907] block font-cooper">{mood.label}</span>
+                          <span className="text-base text-[#0C0907]/70 block">{mood.description}</span>
+                        </div>
+                        <div className="ml-auto">
+                          <svg 
+                            className={`w-6 h-6 transition-all duration-300 ${activeSelection?.value === mood.value ? 'text-[#0C0907]/90 rotate-90' : 'text-[#0C0907]/40'}`} 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
                           >
-                            {/* Progress indicator */}
-                            {activeSelection?.value === mood.value && (
-                              <div 
-                                className="absolute bottom-0 left-0 h-1 bg-[#5A5A58]"
-                                style={{ 
-                                  width: `${confirmProgress}%`,
-                                  transition: 'width 0.05s linear'
-                                }}
-                              ></div>
-                            )}
-                            
-                            {/* Blob */}
-                            <div 
-                              className={`w-12 h-12 mr-3 ${
-                                mood.value === 3 
-                                ? 'irregular-blob-high' 
-                                : mood.value === 2 
-                                ? 'irregular-blob-neutral' 
-                                : 'irregular-blob-low'
-                              }`}
-                              style={{ backgroundColor: mood.color }}
-                            ></div>
-                            
-                            {/* Label and description */}
-                            <div className="flex flex-col flex-1">
-                              <span className="text-lg font-medium font-cooper">{mood.label}</span>
-                              <span className="text-[#0C0907]/70 text-xs line-clamp-1">{mood.description}</span>
-                            </div>
-                            
-                            <div className="ml-2">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="text-[#0C0907]/30">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                              </svg>
-                            </div>
-                          </div>
-                        ))}
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
-                  </>
-                )}
+                  ))}
+                </div>
+                
+                <div className="pt-2 text-center">
+                  <div className="inline-flex items-center justify-center space-x-1 text-xs text-[#0C0907]/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span>Press and hold to confirm selection</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -835,7 +862,7 @@ const DailyMoodTracking = () => {
       </div>
       
       {/* Updated bottom nav bar with improved design */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#F7F6F3] px-6 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0] z-50">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#F7F6F3] px-4 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0]">
         <div className="flex justify-around max-w-md mx-auto">
           <Link 
             href="/mood-tracking" 
@@ -852,7 +879,7 @@ const DailyMoodTracking = () => {
                 <line x1="20" y1="12" x2="20.01" y2="12"></line>
               </svg>
             </div>
-            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#5A5A58]">Track</span>
+            <span className="mt-0.5 text-[12px] sm:text-[13px] font-medium font-cooper text-[#5A5A58]">Track</span>
           </Link>
           
           <Link 
@@ -887,7 +914,7 @@ const DailyMoodTracking = () => {
 
       {/* Breathing Exercise Modal - IMPROVED DESIGN */}
       {showBreathingExercise && (
-        <div className="fixed inset-0 z-[60] flex flex-col animate-fade-in overflow-hidden"
+        <div className="fixed inset-0 z-50 flex flex-col animate-fade-in overflow-hidden"
           style={{ background: 'linear-gradient(145deg, #f7f6f3, #e6e5f0, #d4d3f2)' }}
         >
           {/* Enhanced decorative background elements */}
@@ -917,7 +944,7 @@ const DailyMoodTracking = () => {
           </div>
           
           {(completedExercise || (breathingRound === 4 && breathingStage === 0 && !isBreathingActive)) ? (
-            <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 py-4 relative">
+            <div className="flex-1 flex flex-col items-center justify-center px-6 py-4 relative">
               <div className="animate-float-subtle mb-10">
                 <div className="relative mx-auto">
                   <div className="w-28 h-28 rounded-full bg-[#8A8BDE]/15 mx-auto flex items-center justify-center">
@@ -930,13 +957,13 @@ const DailyMoodTracking = () => {
                 </div>
               </div>
               
-              <div className="text-center mb-10 max-w-sm mx-auto">
-                <h3 className="text-3xl md:text-4xl font-cooper text-[#8A8BDE] mb-6">Wonderful job!</h3>
-                <p className="text-lg text-[#0C0907]/80 mb-8 leading-relaxed">
+              <div className="text-center mb-14 max-w-sm mx-auto">
+                <h3 className="text-4xl font-cooper text-[#8A8BDE] mb-6">Wonderful job!</h3>
+                <p className="text-xl text-[#0C0907]/80 mb-8 leading-relaxed">
                   You've completed your breathing exercise for today.
                 </p>
                 
-                <div className="bg-[#8A8BDE]/15 rounded-2xl p-5 mb-10 shadow-sm max-w-xs mx-auto">
+                <div className="bg-[#8A8BDE]/15 rounded-2xl p-6 mb-10 shadow-sm">
                   <div className="flex items-start">
                     <div className="text-[#8A8BDE] mr-4 mt-1">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -962,12 +989,16 @@ const DailyMoodTracking = () => {
               </button>
             </div>
           ) : autoStartCountdown > 0 && !isBreathingActive ? (
-            <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 py-4 relative">
-              <div className="relative mb-8 animate-float-subtle">
-                <div className="w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center mx-auto bg-white/60 backdrop-blur-sm border border-white/80 relative animate-pulse-gentle"
+            <div className="flex-1 flex flex-col items-center justify-center px-6 py-4 relative">
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-cooper text-[#8A8BDE] mb-3">Starting in</h3>
+              </div>
+              
+              <div className="relative mb-10 animate-float-subtle">
+                <div className="w-32 h-32 rounded-full flex items-center justify-center mx-auto bg-white/60 backdrop-blur-sm border border-white/80 relative animate-pulse-gentle"
                   style={{ boxShadow: '0 10px 30px -5px rgba(138, 139, 222, 0.25)' }}
                 >
-                  <div className="text-7xl md:text-8xl font-cooper text-[#8A8BDE]">
+                  <div className="text-8xl font-cooper text-[#8A8BDE]">
                     {autoStartCountdown}
                   </div>
                   <div className="absolute inset-0 rounded-full border-4 border-[#8A8BDE]/30"></div>
@@ -976,13 +1007,13 @@ const DailyMoodTracking = () => {
               </div>
               
               <div className="text-center mb-6">
-                <p className="text-base md:text-lg text-[#0C0907]/70 max-w-xs mx-auto">
+                <p className="text-lg text-[#0C0907]/70 max-w-xs mx-auto">
                   Get ready to follow along with the breathing exercise
                 </p>
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 py-4 relative">
+            <div className="flex-1 flex flex-col items-center justify-center px-6 py-4 relative">
               <div className="text-center mb-14">
                 <h3 className="text-2xl text-[#8A8BDE] font-cooper mb-1">Round {breathingRound} of 4</h3>
                 <div className="flex space-x-3 justify-center mt-2">
@@ -995,15 +1026,15 @@ const DailyMoodTracking = () => {
                 </div>
               </div>
                 
-              <div className="relative mb-12 md:mb-20 animate-float-subtle">
+              <div className="relative mb-20 animate-float-subtle">
                 <div className="absolute inset-0 rounded-full bg-[#8A8BDE]/20 animate-pulse-gentle"></div>
                 <div 
-                  className={`w-44 h-44 md:w-56 md:h-56 rounded-full flex items-center justify-center mx-auto bg-white/60 backdrop-blur-sm border border-white/80 relative ${getBreathingAnimationClass()}`}
+                  className={`w-56 h-56 rounded-full flex items-center justify-center mx-auto bg-white/60 backdrop-blur-sm border border-white/80 relative ${getBreathingAnimationClass()}`}
                   style={{ 
                     boxShadow: '0 10px 30px -5px rgba(138, 139, 222, 0.25)',
                   }}
                 >
-                  <div className={`text-5xl md:text-6xl font-cooper transition-all duration-300 ${isBreathingActive ? 'animate-color-shift' : 'text-[#8A8BDE]'}`}>
+                  <div className={`text-6xl font-cooper transition-all duration-300 ${isBreathingActive ? 'animate-color-shift' : 'text-[#8A8BDE]'}`}>
                     {isBreathingActive ? breathingTimer : "4"}
                   </div>
                   <div className="absolute inset-0 rounded-full border-4 border-[#8A8BDE]/30"></div>

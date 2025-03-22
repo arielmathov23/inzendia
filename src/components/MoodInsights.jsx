@@ -320,9 +320,9 @@ const MoodInsights = () => {
                 alert('All mood data has been erased.');
               }
             }}
-            className="flex items-center py-2 px-4 text-[#0C0907]/40 hover:text-[#DA7A59]/90 rounded-md transition-colors text-sm font-medium"
+            className="flex items-center py-2 px-4 text-[#0C0907]/40 hover:text-[#DA7A59] rounded-md transition-colors text-sm font-medium"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#DA7A59" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 opacity-70">
               <path d="M3 6h18"></path>
               <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
               <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
@@ -333,7 +333,7 @@ const MoodInsights = () => {
       </div>
       
       {/* Updated bottom nav bar with improved design */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#F7F6F3] px-6 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0]">
+      <div className="fixed bottom-0 left-0 right-0 bg-[#F7F6F3] px-6 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0] z-30">
         <div className="flex justify-around max-w-md mx-auto">
           <Link 
             href="/mood-tracking" 
