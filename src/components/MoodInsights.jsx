@@ -63,29 +63,6 @@ const MoodInsights = () => {
     });
   };
 
-  // Helper functions for insights
-  const getMostFrequentMood = (entries) => {
-    if (!entries.length) return null;
-    
-    const moodCounts = entries.reduce((acc, entry) => {
-      const value = entry.mood.value;
-      acc[value] = (acc[value] || 0) + 1;
-      return acc;
-    }, {});
-    
-    let maxCount = 0;
-    let maxMoodValue = null;
-    
-    Object.entries(moodCounts).forEach(([value, count]) => {
-      if (count > maxCount) {
-        maxCount = count;
-        maxMoodValue = parseInt(value);
-      }
-    });
-    
-    return entries.find(entry => entry.mood.value === maxMoodValue)?.mood;
-  };
-  
   const getAverageMoodValue = (entries) => {
     if (!entries.length) return 2;
     
@@ -109,22 +86,67 @@ const MoodInsights = () => {
     };
   };
 
+  // Calculate current mood streak
+  const getCurrentStreak = () => {
+    if (moodEntries.length === 0) return 0;
+    
+    // Sort entries by date (newest first)
+    const sortedEntries = [...moodEntries].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    // Get today and yesterday dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Check if we have an entry for today
+    const latestEntryDate = new Date(sortedEntries[0].date);
+    latestEntryDate.setHours(0, 0, 0, 0);
+    
+    // If the latest entry is older than yesterday, streak is 0
+    if (latestEntryDate.getTime() < today.getTime() - 86400000) {
+      return 0;
+    }
+    
+    // Calculate streak
+    let streak = 1;
+    let currentDate = latestEntryDate;
+    
+    for (let i = 1; i < sortedEntries.length; i++) {
+      const entryDate = new Date(sortedEntries[i].date);
+      entryDate.setHours(0, 0, 0, 0);
+      
+      // Check if this entry is from the day before the current date
+      const expectedPrevDate = new Date(currentDate);
+      expectedPrevDate.setDate(expectedPrevDate.getDate() - 1);
+      
+      if (entryDate.getTime() === expectedPrevDate.getTime()) {
+        streak++;
+        currentDate = entryDate;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
+
   const renderEmptyState = () => (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-20 h-20 irregular-blob-high bg-[#F0EFEB] flex items-center justify-center mb-6">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-[#0C0907]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
-          <path d="M20 2a10 10 0 0 0-10 10"></path>
-          <path d="M16 2a10 10 0 0 0-10 10"></path>
+    <div className="flex flex-col items-center justify-center py-16 text-center bg-[#F0EFEB] rounded-xl shadow-sm px-8">
+      <div className="w-24 h-24 irregular-blob-high bg-white flex items-center justify-center mb-8 shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-14 w-14 text-[#0C0907]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </div>
-      <h3 className="text-2xl font-medium mb-3 text-[#0C0907] font-cooper">No insights available</h3>
-      <p className="text-base text-[#0C0907]/70 mb-6 max-w-xs">Track your mood for a few days to see patterns and insights here</p>
+      <h3 className="text-2xl font-medium mb-4 text-[#0C0907] font-cooper">No mood data yet</h3>
+      <p className="text-base text-[#0C0907]/70 mb-8 max-w-xs leading-relaxed">
+        Start tracking your mood daily to see patterns, trends, and insights about your emotional well-being
+      </p>
       <Link 
         href="/mood-tracking" 
-        className="inline-flex items-center justify-center py-3 px-6 bg-[#778D5E] text-white rounded-full font-medium transition-colors hover:bg-[#778D5E]/90 font-cooper text-base"
+        className="inline-flex items-center justify-center py-3 px-8 bg-[#5A5A58] text-white rounded-full font-medium transition-colors hover:bg-[#5A5A58]/90 font-cooper text-base"
       >
-        Track Your Mood
+        Start Tracking Today
       </Link>
     </div>
   );
@@ -145,9 +167,9 @@ const MoodInsights = () => {
       return renderEmptyState();
     }
 
-    const mostFrequentMood = getMostFrequentMood(filteredEntries);
     const avgMoodValue = getAverageMoodValue(filteredEntries);
     const distribution = getMoodDistribution(filteredEntries);
+    const currentStreak = getCurrentStreak();
 
     return (
       <div className="w-full">
@@ -156,19 +178,19 @@ const MoodInsights = () => {
             <h3 className="text-2xl font-medium text-[#0C0907] font-cooper">Mood Summary</h3>
             <div className="flex rounded-full overflow-hidden" style={{ backgroundColor: '#F0EFEB' }}>
               <button 
-                className={`py-2 px-5 text-base font-medium ${period === 'week' ? 'bg-[#778D5E] text-white' : 'text-[#0C0907]'} font-cooper`}
+                className={`py-2 px-5 text-base font-medium ${period === 'week' ? 'bg-[#5A5A58] text-white' : 'text-[#0C0907]'} font-cooper`}
                 onClick={() => setPeriod('week')}
               >
                 Week
               </button>
               <button 
-                className={`py-2 px-5 text-base font-medium ${period === 'month' ? 'bg-[#778D5E] text-white' : 'text-[#0C0907]'} font-cooper`}
+                className={`py-2 px-5 text-base font-medium ${period === 'month' ? 'bg-[#5A5A58] text-white' : 'text-[#0C0907]'} font-cooper`}
                 onClick={() => setPeriod('month')}
               >
                 Month
               </button>
               <button 
-                className={`py-2 px-5 text-base font-medium ${period === 'year' ? 'bg-[#778D5E] text-white' : 'text-[#0C0907]'} font-cooper`}
+                className={`py-2 px-5 text-base font-medium ${period === 'year' ? 'bg-[#5A5A58] text-white' : 'text-[#0C0907]'} font-cooper`}
                 onClick={() => setPeriod('year')}
               >
                 Year
@@ -200,20 +222,26 @@ const MoodInsights = () => {
               </div>
             </div>
             
-            {/* Most Frequent Mood Card */}
+            {/* Mood Streak Card - New! */}
             <div className="rounded-xl p-6 bg-[#F0EFEB] h-full">
-              <h4 className="text-lg font-cooper mb-4">Most Frequent Mood</h4>
-              {mostFrequentMood && (
-                <div className="flex items-center">
-                  <div className={`w-16 h-16 ${getBlobClass(mostFrequentMood.value)}`} style={{ backgroundColor: mostFrequentMood.color }}></div>
-                  <div className="ml-6">
-                    <div className="text-xl font-cooper">{mostFrequentMood.label}</div>
-                    <div className="text-sm text-[#0C0907]/70 mt-1">
-                      {mostFrequentMood.description}
-                    </div>
+              <h4 className="text-lg font-cooper mb-4">Current Streak</h4>
+              <div className="flex items-center">
+                <div className="w-16 h-16 rounded-full bg-[#F7F6F3] border-4 border-[#778D5E] flex items-center justify-center shadow-sm">
+                  <span className="text-2xl font-cooper text-[#0C0907]">{currentStreak}</span>
+                </div>
+                <div className="ml-6">
+                  <div className="text-xl font-cooper">
+                    {currentStreak === 0 ? 'No active streak' : 
+                     currentStreak === 1 ? '1 day' : 
+                     `${currentStreak} days`}
+                  </div>
+                  <div className="text-sm text-[#0C0907]/70 mt-1">
+                    {currentStreak === 0 
+                      ? 'Track your mood today to start a streak' 
+                      : 'Keep going to build your streak!'}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -224,7 +252,7 @@ const MoodInsights = () => {
           <div className="space-y-4">
             <div>
               <div className="flex justify-between mb-1">
-                <span className="text-base font-cooper">High</span>
+                <span className="text-base font-cooper">Pleasant</span>
                 <span className="text-base font-cooper">{distribution.high}%</span>
               </div>
               <div className="w-full bg-[#E5E4E0] rounded-full h-3">
@@ -244,7 +272,7 @@ const MoodInsights = () => {
             
             <div>
               <div className="flex justify-between mb-1">
-                <span className="text-base font-cooper">Low</span>
+                <span className="text-base font-cooper">Unpleasant</span>
                 <span className="text-base font-cooper">{distribution.low}%</span>
               </div>
               <div className="w-full bg-[#E5E4E0] rounded-full h-3">
@@ -279,20 +307,20 @@ const MoodInsights = () => {
             <div className="loader"></div>
           </div>
         ) : (
-          renderInsights()
+          moodEntries.length === 0 ? renderEmptyState() : renderInsights()
         )}
       </div>
       
-      {/* Updated bottom nav bar with smoother design */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#0C0907]/5 px-6 py-4 shadow-sm">
+      {/* Updated bottom nav bar with improved design */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#F7F6F3] px-6 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0]">
         <div className="flex justify-around max-w-md mx-auto">
           <Link 
             href="/mood-tracking" 
             className="flex flex-col items-center relative group"
           >
-            <div className="absolute inset-x-0 -top-4 h-1 bg-transparent opacity-0 rounded-b-md transition-all duration-300 group-hover:opacity-50 group-hover:bg-[#778D5E]"></div>
-            <div className="w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 hover:bg-[#F7F6F3] group-hover:scale-110">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0C0907]/60 group-hover:text-[#778D5E]">
+            <div className="absolute inset-x-0 -top-3 h-0.5 bg-transparent opacity-0 rounded-b-md transition-all duration-300 group-hover:opacity-100 group-hover:bg-[#5A5A58]"></div>
+            <div className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 hover:bg-white group-hover:shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0C0907]/60 group-hover:text-[#5A5A58]">
                 <circle cx="12" cy="12" r="8"></circle>
                 <circle cx="12" cy="12" r="3"></circle>
                 <line x1="12" y1="4" x2="12" y2="4.01"></line>
@@ -301,35 +329,35 @@ const MoodInsights = () => {
                 <line x1="20" y1="12" x2="20.01" y2="12"></line>
               </svg>
             </div>
-            <span className="mt-1 text-sm font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#778D5E]">Track</span>
+            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">Track</span>
           </Link>
           
           <Link 
             href="/mood-history" 
             className="flex flex-col items-center relative group"
           >
-            <div className="absolute inset-x-0 -top-4 h-1 bg-transparent opacity-0 rounded-b-md transition-all duration-300 group-hover:opacity-50 group-hover:bg-[#778D5E]"></div>
-            <div className="w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 hover:bg-[#F7F6F3] group-hover:scale-110">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0C0907]/60 group-hover:text-[#778D5E]">
+            <div className="absolute inset-x-0 -top-3 h-0.5 bg-transparent opacity-0 rounded-b-md transition-all duration-300 group-hover:opacity-100 group-hover:bg-[#5A5A58]"></div>
+            <div className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 hover:bg-white group-hover:shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0C0907]/60 group-hover:text-[#5A5A58]">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
               </svg>
             </div>
-            <span className="mt-1 text-sm font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#778D5E]">History</span>
+            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">History</span>
           </Link>
           
           <Link 
             href="/insights" 
             className="flex flex-col items-center relative group"
           >
-            <div className="absolute inset-x-0 -top-4 h-1 bg-[#778D5E] opacity-100 rounded-b-md transition-all duration-300"></div>
-            <div className="w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 bg-white">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#778D5E]">
+            <div className="absolute inset-x-0 -top-3 h-0.5 bg-[#5A5A58] opacity-100 rounded-b-md transition-all duration-300"></div>
+            <div className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 bg-white shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#5A5A58]">
                 <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
                 <path d="M20 2a10 10 0 0 0-10 10"></path>
                 <path d="M16 2a10 10 0 0 0-10 10"></path>
               </svg>
             </div>
-            <span className="mt-1 text-sm font-medium font-cooper text-[#778D5E]">Insights</span>
+            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#5A5A58]">Insights</span>
           </Link>
         </div>
       </div>
