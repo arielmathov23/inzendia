@@ -311,8 +311,9 @@ const DailyMoodTracking = () => {
       
       const saveMoodToSupabase = async () => {
         try {
-          // Format the date as YYYY-MM-DD
-          const dateOnly = new Date(moodData.date).toISOString().split('T')[0];
+          // Don't use the stored ISO date from tempMoodData, always use today's date
+          // to prevent any timezone or future date issues
+          const currentDateOnly = getTodayDateOnly();
           
           // Insert into Supabase
           const { error } = await supabase
@@ -323,7 +324,7 @@ const DailyMoodTracking = () => {
               mood_label: moodData.mood.label,
               mood_color: moodData.mood.color,
               reason: moodData.reason,
-              date: dateOnly
+              date: currentDateOnly // Always use the current day in YYYY-MM-DD format
             });
             
           if (error) throw error;
@@ -437,8 +438,18 @@ const DailyMoodTracking = () => {
   const getCurrentDateISOString = () => {
     // Get the current date in local timezone
     const now = new Date();
-    // Create a new date without time components
-    const localDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Create a date in local timezone without time components
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const day = now.getDate();
+    
+    // Create local date object with midnight local time 
+    const localDate = new Date(year, month, day);
+    
+    // When we convert to ISO string, the timezone offset will be applied
+    // and the date might appear different in UTC, but the record will be 
+    // for the correct local date
     return localDate.toISOString();
   };
 
@@ -446,8 +457,10 @@ const DailyMoodTracking = () => {
     // Get current date in local timezone as YYYY-MM-DD format
     const now = new Date();
     const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
     const day = String(now.getDate()).padStart(2, '0');
+    
+    // This format is used for Supabase queries and local storage comparisons
     return `${year}-${month}-${day}`;
   };
 
@@ -502,14 +515,16 @@ const DailyMoodTracking = () => {
     
     if (!moodToSave) return;
     
-    // Use the properly formatted current date in local timezone
-    const currentDateISOString = getCurrentDateISOString();
+    // Always use today's date for consistency and to prevent timezone issues
     const currentDateOnly = getTodayDateOnly();
+    
+    // For localStorage only, we'll still use the ISO format
+    const currentDateISOString = getCurrentDateISOString();
     
     const entry = {
       mood: moodToSave,
       reason: reasonToSave,
-      date: currentDateISOString
+      date: currentDateISOString // This is used for localStorage only
     };
     
     try {
@@ -529,7 +544,7 @@ const DailyMoodTracking = () => {
             mood_label: moodDataToUse.mood.label,
             mood_color: moodDataToUse.mood.color,
             reason: moodReason.trim() || 'No reason specified',
-            date: currentDateOnly
+            date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
           });
           
         if (error) throw error;
@@ -600,7 +615,7 @@ const DailyMoodTracking = () => {
             mood_label: entry.mood.label,
             mood_color: entry.mood.color,
             reason: entry.reason,
-            date: currentDateOnly
+            date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
           });
           
         if (error) throw error;
