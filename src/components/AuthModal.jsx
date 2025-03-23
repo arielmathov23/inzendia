@@ -11,7 +11,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   
   useEffect(() => {
     // Reset form when modal opens
@@ -57,6 +57,25 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     }
   };
   
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const { success, error } = await signInWithGoogle();
+      if (!success) {
+        setError(error || 'Failed to sign in with Google. Please try again.');
+        setLoading(false);
+      }
+      // Note: Successful Google sign-in will redirect to the callback URL,
+      // so we don't need to handle success here
+    } catch (error) {
+      setError('An unexpected error occurred. Please try again.');
+      console.error('Google auth error:', error);
+      setLoading(false);
+    }
+  };
+  
   if (!isOpen) return null;
   
   return (
@@ -75,6 +94,28 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         <h2 className="text-2xl font-semibold mb-6 font-cooper text-[#0C0907]">
           {mode === 'signup' ? 'Join Pirca' : 'Welcome Back to Pirca'}
         </h2>
+        
+        {/* Google Sign In Button */}
+        <button
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+          className="w-full py-3 px-4 mb-6 rounded-xl font-medium text-[#0C0907] bg-white border border-[#E5E4E0] hover:bg-[#F7F6F3] transition-colors flex items-center justify-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18" className="mr-3">
+            <path fill="#4285F4" d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"/>
+            <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z"/>
+            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z"/>
+          </svg>
+          {mode === 'signup' ? 'Sign up with Google' : 'Sign in with Google'}
+        </button>
+        
+        {/* Separator */}
+        <div className="flex items-center mb-6">
+          <div className="flex-grow h-px bg-[#E5E4E0]"></div>
+          <span className="px-4 text-sm text-[#0C0907]/60">or</span>
+          <div className="flex-grow h-px bg-[#E5E4E0]"></div>
+        </div>
         
         {/* Form */}
         <form onSubmit={handleSubmit}>

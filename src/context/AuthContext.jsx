@@ -10,6 +10,18 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [tempMoodData, setTempMoodData] = useState(null);
 
+  // Load temp mood data from localStorage on initial load
+  useEffect(() => {
+    try {
+      const storedTempMoodData = localStorage.getItem('tempMoodData');
+      if (storedTempMoodData) {
+        setTempMoodData(JSON.parse(storedTempMoodData));
+      }
+    } catch (error) {
+      console.error('Error loading tempMoodData from localStorage:', error);
+    }
+  }, []);
+
   useEffect(() => {
     // Check for active session on initial load
     const checkUser = async () => {
@@ -32,12 +44,18 @@ export function AuthProvider({ children }) {
     
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setUser(session?.user || null);
         
         // If user is logged in, ensure their profile has the email
         if (session?.user?.id) {
-          updateUserProfileWithEmail(session.user.id, session.user.email);
+          // For Google OAuth events, make sure to create a profile
+          if (event === 'SIGNED_IN' && session?.user?.app_metadata?.provider === 'google') {
+            await updateUserProfileWithEmail(session.user.id, session.user.email);
+          } else {
+            // For regular email/password auth
+            await updateUserProfileWithEmail(session.user.id, session.user.email);
+          }
         }
         
         setLoading(false);
@@ -176,7 +194,34 @@ export function AuthProvider({ children }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      
+      // Clear temp mood data on sign out
+      localStorage.removeItem('tempMoodData');
+      setTempMoodData(null);
+      
       return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+  
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    try {
+      // Save any current temp mood data to localStorage before redirect
+      if (tempMoodData) {
+        localStorage.setItem('tempMoodData', JSON.stringify(tempMoodData));
+      }
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      
+      if (error) throw error;
+      return { success: true, data };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -184,12 +229,21 @@ export function AuthProvider({ children }) {
   
   // Store temporary mood data during signup process
   const storeTempMoodData = (data) => {
+    // Store in state
     setTempMoodData(data);
+    
+    // Also store in localStorage for persistence across page loads
+    if (data) {
+      localStorage.setItem('tempMoodData', JSON.stringify(data));
+    } else {
+      localStorage.removeItem('tempMoodData');
+    }
   };
   
   // Clear temporary mood data after it's been processed
   const clearTempMoodData = () => {
     setTempMoodData(null);
+    localStorage.removeItem('tempMoodData');
   };
   
   const value = {
@@ -198,6 +252,7 @@ export function AuthProvider({ children }) {
     signUp,
     signIn,
     signOut,
+    signInWithGoogle,
     tempMoodData,
     storeTempMoodData,
     clearTempMoodData,
