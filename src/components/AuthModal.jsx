@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import '../styles/AuthModal.css';
 
 const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [mode, setMode] = useState(initialMode);
