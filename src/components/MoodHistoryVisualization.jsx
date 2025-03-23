@@ -171,15 +171,27 @@ const MoodHistoryVisualization = () => {
         if (error) throw error;
         
         // Transform Supabase data to match the local format
-        const formattedEntries = data.map(entry => ({
-          mood: {
-            value: entry.mood_value,
-            label: entry.mood_label,
-            color: entry.mood_color
-          },
-          reason: entry.reason,
-          date: new Date(entry.date).toISOString()
-        }));
+        const formattedEntries = data.map(entry => {
+          // Extract just the date part from the database entry to avoid timezone issues
+          // The date in the database is in YYYY-MM-DD format
+          const dateParts = entry.date.split('T')[0].split('-');
+          const year = parseInt(dateParts[0]);
+          const month = parseInt(dateParts[1]) - 1; // JavaScript months are 0-indexed
+          const day = parseInt(dateParts[2]);
+          
+          // Create a date object with noon UTC time to ensure consistent date representation
+          const entryDate = new Date(Date.UTC(year, month, day, 12, 0, 0));
+          
+          return {
+            mood: {
+              value: entry.mood_value,
+              label: entry.mood_label,
+              color: entry.mood_color
+            },
+            reason: entry.reason,
+            date: entryDate.toISOString()
+          };
+        });
         
         setMoodEntries(formattedEntries);
       } 
@@ -236,7 +248,23 @@ const MoodHistoryVisualization = () => {
 
   // Format date for display
   const formatDate = (dateString, format = 'short') => {
-    const date = new Date(dateString);
+    // Parse the date string and create a date object that preserves the date
+    let date;
+    if (typeof dateString === 'string') {
+      if (dateString.includes('T')) {
+        // Extract date components and create date with noon UTC
+        const dateParts = dateString.split('T')[0].split('-');
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]) - 1; // JavaScript months are 0-indexed
+        const day = parseInt(dateParts[2]);
+        
+        date = new Date(Date.UTC(year, month, day, 12, 0, 0));
+      } else {
+        date = new Date(dateString);
+      }
+    } else {
+      date = new Date(dateString);
+    }
     
     if (format === 'short') {
     return date.toLocaleDateString('en-US', { 

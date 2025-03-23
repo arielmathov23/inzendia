@@ -238,21 +238,20 @@ const DailyMoodTracking = () => {
             .from('mood_entries')
             .select('*')
             .eq('user_id', user.id)
-            .eq('date', today)
-            .single();
+            .eq('date', today);
             
-          if (error && error.code !== 'PGRST116') {
+          if (error) {
             console.error('Error fetching mood entry from Supabase:', error);
           }
           
-          if (data) {
+          if (data && data.length > 0) {
             setTodaysMood({
-              value: data.mood_value,
-              label: data.mood_label,
-              color: data.mood_color,
-              description: moods.find(m => m.value === data.mood_value)?.description || ''
+              value: data[0].mood_value,
+              label: data[0].mood_label,
+              color: data[0].mood_color,
+              description: moods.find(m => m.value === data[0].mood_value)?.description || ''
             });
-            setTodayMoodReason(data.reason || 'No reason specified');
+            setTodayMoodReason(data[0].reason || 'No reason specified');
             setSubmittedToday(true);
             setLoading(false);
             return;
@@ -439,18 +438,15 @@ const DailyMoodTracking = () => {
     // Get the current date in local timezone
     const now = new Date();
     
-    // Create a date in local timezone without time components
+    // Create a date string in ISO format but preserve the local date
+    // Format: yyyy-mm-ddT00:00:00.000Z
     const year = now.getFullYear();
-    const month = now.getMonth();
-    const day = now.getDate();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
     
-    // Create local date object with midnight local time 
-    const localDate = new Date(year, month, day);
-    
-    // When we convert to ISO string, the timezone offset will be applied
-    // and the date might appear different in UTC, but the record will be 
-    // for the correct local date
-    return localDate.toISOString();
+    // Use the date components with UTC time set to noon to avoid any timezone issues
+    // Using noon (12:00) ensures the date won't change in any timezone
+    return `${year}-${month}-${day}T12:00:00.000Z`;
   };
 
   const getTodayDateOnly = () => {
@@ -874,14 +870,14 @@ const DailyMoodTracking = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 pb-20 sm:p-6" style={{ backgroundColor: '#E5E4E0' }}>
+    <div className="flex flex-col items-center justify-start min-h-screen p-4 pb-28 sm:p-6 sm:pb-28" style={{ backgroundColor: '#E5E4E0' }}>
       {/* Custom animations */}
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
       
       <div className="w-full max-w-md">
         <header className="mb-4 sm:mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Daily Mood Tracking</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Pirca Mood Tracking</h1>
             <p className="text-sm sm:text-base text-[#0C0907]/70 mt-1">{formatDate()}</p>
           </div>
           <div className="flex items-center space-x-2">

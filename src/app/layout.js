@@ -16,11 +16,19 @@ export const metadata = {
     initialScale: 1,
     maximumScale: 1,
   },
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/logo.png" />
+      </head>
       <body>
         <AuthProvider>
           <div className="min-h-screen bg-background antialiased">

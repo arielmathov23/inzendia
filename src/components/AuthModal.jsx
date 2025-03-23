@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [mode, setMode] = useState(initialMode);
@@ -11,7 +12,21 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user } = useAuth();
+  const router = useRouter();
+  
+  useEffect(() => {
+    // If user becomes authenticated and modal is open, handle success
+    if (user && isOpen && !loading) {
+      if (afterAuth) {
+        afterAuth();
+      } else {
+        // Close modal and refresh the page to update UI
+        onClose();
+        router.refresh();
+      }
+    }
+  }, [user, isOpen, loading, afterAuth, onClose, router]);
   
   useEffect(() => {
     // Reset form when modal opens
@@ -31,12 +46,18 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     
     try {
       if (mode === 'signup') {
-        const { success, error } = await signUp(email, password);
+        const { success, error, data } = await signUp(email, password);
         if (success) {
           setSuccess('Account created successfully!');
+          // Force a router refresh to update authentication state in the UI
+          router.refresh();
           // Brief delay before closing to show success message
           setTimeout(() => {
-            if (afterAuth) afterAuth();
+            if (afterAuth) {
+              afterAuth();
+            } else {
+              onClose();
+            }
           }, 1000);
         } else {
           setError(error || 'Failed to sign up. Please try again.');
@@ -44,7 +65,14 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
       } else {
         const { success, error } = await signIn(email, password);
         if (success) {
-          if (afterAuth) afterAuth();
+          setSuccess('Signed in successfully!');
+          // Force a router refresh to update authentication state in the UI
+          router.refresh();
+          if (afterAuth) {
+            afterAuth();
+          } else {
+            onClose();
+          }
         } else {
           setError(error || 'Invalid email or password.');
         }
@@ -91,7 +119,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         {/* Decorative element */}
         <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl bg-gradient-to-r from-[#DA7A59] via-[#D9C69C] to-[#778D5E]"></div>
         
-        <h2 className="text-2xl font-semibold mb-6 font-cooper text-[#0C0907]">
+        {/* Logo centered at the top */}
+        <div className="flex justify-center mb-4">
+          <img src="/logo.png" alt="Pirca logo" className="h-12 w-12 object-contain" />
+        </div>
+        
+        <h2 className="text-2xl font-semibold mb-6 font-cooper text-[#0C0907] text-center">
           {mode === 'signup' ? 'Join Pirca' : 'Welcome Back to Pirca'}
         </h2>
         
