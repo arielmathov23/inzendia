@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [mode, setMode] = useState(initialMode);
@@ -12,7 +11,6 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [fullName, setFullName] = useState('');
   
   const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const router = useRouter();
@@ -176,146 +174,6 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     }
   };
   
-  const handleSignUp = async (e) => {
-    e.preventDefault();
-    console.log(`Starting signup process for ${email}`);
-
-    setLoading(true);
-    setError('');
-    
-    // Store current tempMoodData before auth process
-    let currentTempMoodData = null;
-    try {
-      const storedData = localStorage.getItem('tempMoodData');
-      console.log('Temporary mood data before signup:', storedData);
-      if (storedData) {
-        currentTempMoodData = JSON.parse(storedData);
-      }
-    } catch (err) {
-      console.error('Error accessing tempMoodData before signup:', err);
-    }
-    
-    try {
-      // Check if the user already exists
-      const { data: existingUsers } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email.toLowerCase());
-      
-      if (existingUsers && existingUsers.length > 0) {
-        setError('An account with this email already exists. Please sign in instead.');
-        setLoading(false);
-        return;
-      }
-
-      // Create user account
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          }
-        }
-      });
-
-      if (error) {
-        console.error('Signup error:', error);
-        setError(error.message || 'An error occurred during sign up.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Signup successful:', data);
-      
-      // Insert user into users table
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: data.user.id,
-            email: email.toLowerCase(),
-            full_name: fullName,
-            created_at: new Date(),
-          }
-        ]);
-
-      if (insertError) {
-        console.error('Error inserting user:', insertError);
-      }
-      
-      // Restore tempMoodData after successful authentication
-      if (currentTempMoodData) {
-        console.log('Restoring mood data after signup:', currentTempMoodData);
-        localStorage.setItem('tempMoodData', JSON.stringify(currentTempMoodData));
-      }
-
-      setLoading(false);
-      if (afterAuth) {
-        afterAuth();
-      } else {
-        onClose();
-      }
-    } catch (err) {
-      console.error('Unexpected signup error:', err);
-      setError('An unexpected error occurred. Please try again.');
-      setLoading(false);
-    }
-  };
-
-  const handleSignIn = async (e) => {
-    e.preventDefault();
-    console.log(`Starting signin process for ${email}`);
-
-    setLoading(true);
-    setError('');
-    
-    // Store current tempMoodData before auth process
-    let currentTempMoodData = null;
-    try {
-      const storedData = localStorage.getItem('tempMoodData');
-      console.log('Temporary mood data before signin:', storedData);
-      if (storedData) {
-        currentTempMoodData = JSON.parse(storedData);
-      }
-    } catch (err) {
-      console.error('Error accessing tempMoodData before signin:', err);
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        console.error('Signin error:', error);
-        setError(error.message || 'Invalid email or password');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Signin successful:', data);
-      
-      // Restore tempMoodData after successful authentication
-      if (currentTempMoodData) {
-        console.log('Restoring mood data after signin:', currentTempMoodData);
-        localStorage.setItem('tempMoodData', JSON.stringify(currentTempMoodData));
-      }
-
-      setLoading(false);
-      if (afterAuth) {
-        afterAuth();
-      } else {
-        onClose();
-      }
-    } catch (err) {
-      console.error('Unexpected signin error:', err);
-      setError('An unexpected error occurred. Please try again.');
-      setLoading(false);
-    }
-  };
-  
   if (!isOpen) return null;
   
   return (
@@ -363,138 +221,77 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         </div>
         
         {/* Form */}
-        {mode === 'signup' ? (
-          <form 
-            className="space-y-4 md:space-y-6" 
-            onSubmit={handleSignUp}
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="email" className="block text-sm font-medium text-[#0C0907]/70 mb-1">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 bg-white border border-[#E5E4E0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8A8BDE]"
+              placeholder="your@email.com"
+              required
+            />
+          </div>
+          
+          <div className="mb-6">
+            <label htmlFor="password" className="block text-sm font-medium text-[#0C0907]/70 mb-1">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-white border border-[#E5E4E0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8A8BDE]"
+              placeholder="••••••••"
+              required
+              minLength={6}
+            />
+          </div>
+          
+          {error && (
+            <div className="mb-4 p-3 bg-[#DA7A59]/10 text-[#DA7A59] rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          
+          {success && (
+            <div className="mb-4 p-3 bg-[#778D5E]/10 text-[#778D5E] rounded-lg text-sm">
+              {success}
+            </div>
+          )}
+          
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-medium text-white transition-opacity ${
+              loading ? 'opacity-70' : 'opacity-100'
+            } bg-[#8A8BDE] hover:bg-[#8A8BDE]/90`}
           >
-            <div>
-              <label htmlFor="fullName" className="block mb-2 text-sm font-medium text-gray-900">
-                Full Name
-              </label>
-              <input
-                type="text"
-                name="fullName"
-                id="fullName"
-                className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5"
-                placeholder="Your Name"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                id="email"
-                className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5"
-                placeholder="name@company.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-900">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                id="password"
-                placeholder="••••••••"
-                className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-            {success && <div className="text-green-500 text-sm">{success}</div>}
-            
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl font-medium text-white transition-opacity bg-[#8A8BDE] hover:bg-[#8A8BDE]/90"
-              disabled={loading}
-            >
-              {loading ? 'Creating account...' : 'Create an account'}
-            </button>
-            
-            <p className="text-sm font-light text-gray-500">
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('signin')}
-                className="text-[#8A8BDE] hover:text-[#6061C0] font-medium hover:underline"
-              >
-                Sign in
-              </button>
-            </p>
-          </form>
-        ) : (
-          <form 
-            className="space-y-4 md:space-y-6" 
-            onSubmit={handleSignIn}
+            {loading ? (
+              <span className="flex items-center justify-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing
+              </span>
+            ) : mode === 'signup' ? 'Create Account' : 'Sign In'}
+          </button>
+        </form>
+        
+        <div className="mt-5 text-center">
+          <button
+            onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
+            className="text-sm text-[#8A8BDE] hover:text-[#6061C0] transition-colors"
           >
-            <div>
-              <label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                id="email"
-                className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5"
-                placeholder="name@company.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-900">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                id="password"
-                placeholder="••••••••"
-                className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-            {success && <div className="text-green-500 text-sm">{success}</div>}
-            
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl font-medium text-white transition-opacity bg-[#8A8BDE] hover:bg-[#8A8BDE]/90"
-              disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-            
-            <p className="text-sm font-light text-gray-500">
-              Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('signup')}
-                className="text-[#8A8BDE] hover:text-[#6061C0] font-medium hover:underline"
-              >
-                Sign up
-              </button>
-            </p>
-          </form>
-        )}
+            {mode === 'signup' ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
+          </button>
+        </div>
         
         {/* Subtle branding */}
         <div className="mt-8 text-center">

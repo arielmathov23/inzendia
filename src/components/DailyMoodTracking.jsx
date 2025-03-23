@@ -8,7 +8,6 @@ import LoginButton from './LoginButton';
 import ProfileDropdown from './ProfileDropdown';
 import AuthModal from './AuthModal';
 import supabase from '@/lib/supabase';
-import { toast } from 'react-hot-toast';
 
 // Custom animations
 const customStyles = `
@@ -216,7 +215,6 @@ const DailyMoodTracking = () => {
   const [autoStartCountdown, setAutoStartCountdown] = useState(4);
   const autoStartRef = useRef(null);
   const [todayMoodReason, setTodayMoodReason] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   
   const { user, isAuthenticated, storeTempMoodData, tempMoodData, clearTempMoodData } = useAuth();
 
@@ -286,40 +284,42 @@ const DailyMoodTracking = () => {
     checkTodaySubmission();
   }, [isAuthenticated, user, moods]);
 
-  // Check for any stored mood data when component mounts or auth state changes
   useEffect(() => {
-    console.log(`Auth state changed: isAuthenticated=${isAuthenticated}, user=${user ? 'exists' : 'null'}`);
-    
+    // If we have temp mood data and user is authenticated, save the mood entry
     if (isAuthenticated && user) {
-      console.log('User is authenticated, checking for temporary mood data');
+      console.log('User authenticated, checking for temp mood data');
       
-      // First check for temp mood data in context
-      let tempData = tempMoodData;
-      
-      // If not in context, try localStorage
-      if (!tempData) {
+      // First check context tempMoodData, then fall back to localStorage
+      const moodData = tempMoodData || (() => {
         try {
           const storedData = localStorage.getItem('tempMoodData');
-          console.log('Checking localStorage for tempMoodData:', storedData);
-          if (storedData) {
-            tempData = JSON.parse(storedData);
-          }
+          console.log('Checking localStorage for tempMoodData:', storedData ? 'found' : 'not found');
+          return storedData ? JSON.parse(storedData) : null;
         } catch (e) {
           console.error('Error parsing tempMoodData from localStorage:', e);
+          return null;
         }
+      })();
+      
+      if (!moodData) {
+        console.log('No mood data found for authenticated user');
+        return;
       }
       
-      // If we found temp mood data, show reason input to complete the entry
-      if (tempData) {
-        console.log('Found temp mood data for authenticated user:', tempData);
-        setSelectedMood(tempData.mood);
+      console.log('Found mood data for authenticated user:', moodData);
+      
+      // If reason is "No reason specified", show reason input modal again
+      if (moodData.reason === "No reason specified") {
+        console.log('Mood data has no reason, showing reason input');
+        setSelectedMood(moodData.mood);
         setShowReasonInput(true);
-        
-        // Pre-fill reason if it's not the default
-        if (tempData.reason && tempData.reason !== "No reason specified") {
-          setMoodReason(tempData.reason);
-        }
+        // Keep temp data for later submission with proper reason
+        return;
       }
+      
+      // Otherwise, save the mood entry with the existing reason
+      console.log('Mood data has reason, saving entry');
+      saveMoodEntry(true);
     }
   }, [isAuthenticated, user, tempMoodData]);
 
@@ -471,69 +471,183 @@ const DailyMoodTracking = () => {
     }
   };
 
-  const saveMoodEntry = async () => {
-    if (!selectedMood) return;
+  const saveMoodEntry = async (useTemp = false) => {
+    console.log('Saving mood entry, useTemp:', useTemp);
     
-    // Use the reason from the input field if it's being shown (prioritize user input)
-    // Otherwise fall back to a stored reason or default
-    const finalReason = showReasonInput 
-      ? (moodReason.trim() || "No reason specified") 
-      : (tempMoodData?.reason || "No reason specified");
-    
-    console.log(`Saving mood entry: ${selectedMood} with reason: "${finalReason}"`);
-    console.log(`Current UI state - showReasonInput: ${showReasonInput}, moodReason: "${moodReason}"`);
-    
-    if (isAuthenticated) {
+    // Check context tempMoodData first, then fall back to localStorage if needed
+    let contextTempMoodData = tempMoodData;
+    if (useTemp && !contextTempMoodData) {
       try {
-        setIsSaving(true);
-        
-        const { data, error } = await supabase
-          .from('mood_entries')
-          .insert([
-            {
-              user_id: user.id,
-              mood: selectedMood,
-              reason: finalReason,
-              entry_date: new Date().toISOString().split('T')[0]
-            }
-          ]);
-
-        setIsSaving(false);
-        
-        if (error) {
-          console.error('Error saving mood entry:', error);
-          toast.error('Failed to save your mood. Please try again.');
-          return;
-        }
-        
-        toast.success('Your mood has been recorded!');
-        
-        // Clear the temp data now that it's been saved
-        localStorage.removeItem('tempMoodData');
-        setTempMoodData(null);
-        
-        // Reset UI state
-        setShowReasonInput(false);
-        setMoodReason('');
-        setSelectedMood(null);
-        
-        // Refresh mood data if needed
-        if (fetchMoodData) {
-          fetchMoodData();
-        }
-      } catch (error) {
-        setIsSaving(false);
-        console.error('Error in mood saving process:', error);
-        toast.error('Something went wrong. Please try again.');
+        const storedData = localStorage.getItem('tempMoodData');
+        console.log('Getting mood data from localStorage:', storedData ? 'found' : 'not found');
+        contextTempMoodData = storedData ? JSON.parse(storedData) : null;
+      } catch (e) {
+        console.error('Error parsing tempMoodData from localStorage:', e);
       }
-    } else {
-      // For unauthenticated users, store the data temporarily
-      const tempData = { mood: selectedMood, reason: finalReason };
-      localStorage.setItem('tempMoodData', JSON.stringify(tempData));
-      setTempMoodData(tempData);
+    }
+    
+    // Use temp data if provided (from auth flow) or current state
+    const moodToSave = useTemp ? contextTempMoodData?.mood : selectedMood;
+    const reasonToSave = useTemp ? (contextTempMoodData?.reason !== "No reason specified" ? 
+      contextTempMoodData?.reason : moodReason.trim() || 'No reason specified') : 
+      moodReason.trim() || 'No reason specified';
+    
+    console.log('Mood to save:', moodToSave?.label, 'Reason:', reasonToSave);
+    
+    if (!moodToSave) {
+      console.log('No mood to save, aborting');
+      return;
+    }
+    
+    // Always use today's date for consistency and to prevent timezone issues
+    const currentDateOnly = getTodayDateOnly();
+    
+    // For localStorage only, we'll still use the ISO format
+    const currentDateISOString = getCurrentDateISOString();
+    
+    const entry = {
+      mood: moodToSave,
+      reason: reasonToSave,
+      date: currentDateISOString // This is used for localStorage only
+    };
+    
+    try {
+      // For newly authenticated users updating their reason
+      if (isAuthenticated && user && (tempMoodData || contextTempMoodData)) {
+        console.log('Authenticated user with mood data, saving entry with reason:', reasonToSave);
+        
+        // Use the mood data from either context or localStorage
+        const moodDataToUse = tempMoodData || contextTempMoodData;
+        
+        // Insert into Supabase with the updated reason and current date
+        const { error } = await supabase
+          .from('mood_entries')
+          .insert({
+            user_id: user.id,
+            mood_value: moodDataToUse.mood.value,
+            mood_label: moodDataToUse.mood.label,
+            mood_color: moodDataToUse.mood.color,
+            reason: reasonToSave,
+            date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
+          });
+          
+        if (error) {
+          console.error('Error inserting mood entry:', error);
+          throw error;
+        }
+        
+        console.log('Successfully saved mood entry with reason');
+        
+        // Update UI
+        setTodaysMood(moodDataToUse.mood);
+        setTodayMoodReason(reasonToSave);
+        setSubmittedToday(true);
+        setShowReasonInput(false);
+        clearTempMoodData();
+        localStorage.removeItem('tempMoodData');
+        
+        // Reset confirmation animation after some time
+        setTimeout(() => {
+          setConfirmationAnimating(false);
+        }, 1500);
+        
+        return;
+      }
       
-      // Show authentication options
-      setShowAuthModal(true);
+      // Save to localStorage for anonymous users
+      if (!isAuthenticated) {
+        const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+      
+        // Filter out any existing entries from today (using YYYY-MM-DD format comparison)
+        const todayDateOnly = getTodayDateOnly();
+        const filteredEntries = existingEntries.filter(entry => {
+          const entryDate = new Date(entry.date);
+          const entryDateFormatted = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+          return entryDateFormatted !== todayDateOnly;
+        });
+      
+        // Add new entry and store temp data for after auth
+        filteredEntries.push(entry);
+        localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
+        
+        // Store for post-auth saving
+        storeTempMoodData(entry);
+        
+        // Set mood state and close reason input
+        setTodaysMood(moodToSave);
+        setTodayMoodReason(reasonToSave);
+        setSubmittedToday(true);
+        setActiveSelection(null);
+        setConfirmProgress(0);
+        setShowReasonInput(false);
+        
+        // Show authentication modal after saving as guest
+        setTimeout(() => {
+          setShowAuthModal(true);
+        }, 600);
+        
+        // Reset confirmation animation after some time
+        setTimeout(() => {
+          setConfirmationAnimating(false);
+        }, 1500);
+        
+        return;
+      } 
+      // Save to Supabase for authenticated users
+      else if (user) {
+        console.log('Saving mood entry for authenticated user without temp data');
+        
+        // Insert into Supabase using current date
+        const { error } = await supabase
+          .from('mood_entries')
+          .insert({
+            user_id: user.id,
+            mood_value: entry.mood.value,
+            mood_label: entry.mood.label,
+            mood_color: entry.mood.color,
+            reason: entry.reason,
+            date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
+          });
+          
+        if (error) {
+          console.error('Error saving to Supabase:', error);
+          throw error;
+        }
+        
+        console.log('Successfully saved to Supabase');
+        
+        // Update UI state - this was missing for authenticated users
+        setTodaysMood(moodToSave);
+        setTodayMoodReason(entry.reason);
+        setSubmittedToday(true);
+        setShowReasonInput(false);
+        
+        // Reset confirmation state after animation
+        setTimeout(() => {
+          setConfirmationAnimating(false);
+        }, 1500);
+        
+        return; // Important: exit the function after successful save
+      }
+      
+      // Set mood and trigger animation
+      setTimeout(() => {
+        setTodaysMood(moodToSave);
+        setSubmittedToday(true);
+        setActiveSelection(null);
+        setConfirmProgress(0);
+        setShowReasonInput(false);
+        
+        // Reset confirmation state after animation
+        setTimeout(() => {
+          setConfirmationAnimating(false);
+        }, 1500);
+      }, 300);
+    } catch (error) {
+      console.error('Error saving mood:', error);
+      setActiveSelection(null);
+      setConfirmProgress(0);
+      setShowReasonInput(false);
     }
   };
 
@@ -551,34 +665,23 @@ const DailyMoodTracking = () => {
 
   const handleAfterAuth = () => {
     setShowAuthModal(false);
-    console.log('After auth handler called');
     
     // First check context tempMoodData, then fall back to localStorage
     let moodData = tempMoodData;
     if (!moodData) {
       try {
         const storedData = localStorage.getItem('tempMoodData');
-        console.log('Loading tempMoodData from localStorage after auth:', storedData);
         moodData = storedData ? JSON.parse(storedData) : null;
       } catch (e) {
         console.error('Error parsing tempMoodData from localStorage:', e);
       }
     }
     
-    console.log('Mood data after auth:', moodData);
-    
-    // If user just signed up and we have temp mood data, always show the reason input
-    // to complete their entry, regardless of whether it has "No reason specified"
-    if (isAuthenticated && moodData) {
-      console.log('User authenticated with mood data, showing reason input');
+    // If user just signed up and we have temp mood data with no reason,
+    // show the reason input modal to complete their entry
+    if (isAuthenticated && moodData && moodData.reason === "No reason specified") {
       setSelectedMood(moodData.mood);
       setShowReasonInput(true);
-      // For data consistency, pre-fill the reason if it's not the default
-      if (moodData.reason && moodData.reason !== "No reason specified") {
-        setMoodReason(moodData.reason);
-      } else {
-        setMoodReason('');
-      }
     }
     // Otherwise, the mood will be saved via the useEffect that watches for tempMoodData and isAuthenticated
   };
@@ -1233,7 +1336,10 @@ const DailyMoodTracking = () => {
               {isAuthenticated ? (
                 <button
                   className="px-6 py-2 bg-[#8A8BDE] text-white rounded-md hover:bg-[#8A8BDE]/90 transition-colors active:scale-95"
-                  onClick={saveMoodEntry}
+                  onClick={() => {
+                    // Fix: Don't use temp data when selectedMood is available directly
+                    saveMoodEntry(selectedMood ? false : true);
+                  }}
                 >
                   Save
                 </button>
