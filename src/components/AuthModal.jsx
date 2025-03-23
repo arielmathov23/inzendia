@@ -8,100 +8,168 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [password2, setPassword2] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  const { signIn, signUp, signInWithGoogle, user, authLoading, authError } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const router = useRouter();
   
-  // Reset form when modal opens/closes or mode changes
   useEffect(() => {
+    // If user becomes authenticated and modal is open, handle success
+    if (user && isOpen) {
+      console.log('User authenticated, closing modal');
+      
+      // Reset form state
+      setLoading(false);
+      setError('');
+      setSuccess('Authentication successful!');
+      
+      // Close the modal with a short delay
+      const closeTimeout = setTimeout(() => {
+        console.log('Closing auth modal after successful auth');
+        if (afterAuth) {
+          afterAuth();
+        } else {
+          onClose();
+        }
+      }, 500);
+      
+      return () => clearTimeout(closeTimeout);
+    }
+  }, [user, isOpen, afterAuth, onClose]);
+  
+  useEffect(() => {
+    // Reset form when modal opens
     if (isOpen) {
-      setMode(initialMode);
       setEmail('');
       setPassword('');
-      setPassword2('');
       setError('');
       setSuccess('');
+      setMode(initialMode);
     }
   }, [isOpen, initialMode]);
   
+  // Add safety timeout to reset loading state
   useEffect(() => {
-    if (authError) {
-      setError(authError);
-      setLoading(false);
+    let timeoutId;
+    
+    if (loading) {
+      // If loading state persists for more than 10 seconds, reset it
+      timeoutId = setTimeout(() => {
+        console.log('Auth operation timeout - resetting loading state');
+        setLoading(false);
+        setError('The operation is taking longer than expected. Please try again.');
+      }, 10000);
     }
-  }, [authError]);
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [loading]);
   
-  useEffect(() => {
-    setLoading(authLoading);
-  }, [authLoading]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setError('');
+    
+    console.log(`Starting ${mode} process with email: ${email}`);
+    
+    // Save tempMoodData before auth to restore it after
+    let tempMoodData = null;
+    try {
+      const storedData = localStorage.getItem('tempMoodData');
+      console.log('Storing tempMoodData before auth:', storedData);
+      tempMoodData = storedData;
+    } catch (e) {
+      console.error('Error accessing tempMoodData before auth:', e);
+    }
     
     try {
       if (mode === 'signup') {
-        // Validate passwords match
-        if (password !== password2) {
-          setError('Passwords do not match');
-          setLoading(false);
-          return;
-        }
+        console.log('Calling signUp function');
+        const { success, error, data } = await signUp(email, password);
+        console.log('signUp response:', { success, error, data: data ? 'data object' : undefined });
         
-        // Validate password length
-        if (password.length < 6) {
-          setError('Password must be at least 6 characters');
-          setLoading(false);
-          return;
-        }
-        
-        console.log('Submitting signup form...');
-        await signUp(email, password);
-        
-        // If no error was set by the time we get here, close the modal
-        if (!authError) {
+        if (success) {
+          // Restore tempMoodData after successful signup
+          if (tempMoodData) {
+            console.log('Restoring tempMoodData after successful signup');
+            localStorage.setItem('tempMoodData', tempMoodData);
+          }
+          
+          setSuccess('Account created successfully!');
           console.log('Signup successful, closing modal');
+          // Close immediately rather than waiting
           if (afterAuth) {
+            console.log('Calling afterAuth callback from signup');
             afterAuth();
           } else {
             onClose();
           }
+        } else {
+          console.log('Signup failed:', error);
+          setError(error || 'Failed to sign up. Please try again.');
+          setLoading(false);
         }
       } else {
-        console.log('Submitting signin form...');
-        await signIn(email, password);
+        console.log('Calling signIn function');
+        const { success, error } = await signIn(email, password);
+        console.log('signIn response:', { success, error });
         
-        // If no error was set by the time we get here, close the modal
-        if (!authError) {
-          console.log('Signin successful, closing modal');
+        if (success) {
+          // Restore tempMoodData after successful signin
+          if (tempMoodData) {
+            console.log('Restoring tempMoodData after successful signin');
+            localStorage.setItem('tempMoodData', tempMoodData);
+          }
+          
+          setSuccess('Signed in successfully!');
+          console.log('Sign in successful, closing modal');
+          // Close immediately rather than waiting
           if (afterAuth) {
+            console.log('Calling afterAuth callback from signin');
             afterAuth();
           } else {
             onClose();
           }
+        } else {
+          console.log('Sign in failed:', error);
+          setError(error || 'Invalid email or password.');
+          setLoading(false);
         }
       }
-    } catch (err) {
-      console.error('Error in auth flow:', err);
-      setError(err.message || 'An unexpected error occurred');
+    } catch (error) {
+      console.error('Auth error:', error);
+      setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };
-
+  
   const handleGoogleSignIn = async () => {
-    setError('');
     setLoading(true);
+    setError('');
+    
     try {
-      await signInWithGoogle();
-      // The redirect will happen automatically, no need to do anything here
-    } catch (err) {
-      console.error('Google sign in error:', err);
-      setError('Failed to sign in with Google. Please try again.');
+      const { success, error } = await signInWithGoogle();
+      
+      if (!success) {
+        setError(error || 'Failed to sign in with Google. Please try again.');
+        setLoading(false);
+      }
+      
+      // Set a timeout to prevent UI getting stuck if redirect doesn't happen
+      const timeoutId = setTimeout(() => {
+        setLoading(false);
+        setError('Sign-in is taking longer than expected. Please try again.');
+      }, 10000);
+      
+      // Google sign-in redirects to another page, so we don't need to handle success case here
+      // We just need to ensure the timeout is cleared if component unmounts
+      return () => clearTimeout(timeoutId);
+    } catch (error) {
+      setError('An unexpected error occurred. Please try again.');
+      console.error('Google auth error:', error);
       setLoading(false);
     }
   };
@@ -169,7 +237,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
             />
           </div>
           
-          <div className="mb-4">
+          <div className="mb-6">
             <label htmlFor="password" className="block text-sm font-medium text-[#0C0907]/70 mb-1">
               Password
             </label>
@@ -185,24 +253,6 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
             />
           </div>
           
-          {mode === 'signup' && (
-            <div className="mb-6">
-              <label htmlFor="password2" className="block text-sm font-medium text-[#0C0907]/70 mb-1">
-                Confirm Password
-              </label>
-              <input
-                id="password2"
-                type="password"
-                value={password2}
-                onChange={(e) => setPassword2(e.target.value)}
-                className="w-full px-4 py-3 bg-white border border-[#E5E4E0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8A8BDE]"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
-          )}
-          
           {error && (
             <div className="mb-4 p-3 bg-[#DA7A59]/10 text-[#DA7A59] rounded-lg text-sm">
               {error}
@@ -215,8 +265,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
             </div>
           )}
           
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className={`w-full py-3 rounded-xl font-medium text-white transition-opacity ${
               loading ? 'opacity-70' : 'opacity-100'
@@ -235,7 +285,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         </form>
         
         <div className="mt-5 text-center">
-          <button 
+          <button
             onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
             className="text-sm text-[#8A8BDE] hover:text-[#6061C0] transition-colors"
           >
