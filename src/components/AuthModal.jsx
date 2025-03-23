@@ -75,6 +75,18 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     
     console.log(`Starting ${mode} process with email: ${email}`);
     
+    // Store the current tempMoodData before authentication to ensure it's not lost
+    const currentTempMoodData = (() => {
+      try {
+        const storedData = localStorage.getItem('tempMoodData');
+        console.log('Current tempMoodData before auth:', storedData);
+        return storedData;
+      } catch (e) {
+        console.error('Error accessing tempMoodData from localStorage:', e);
+        return null;
+      }
+    })();
+    
     try {
       if (mode === 'signup') {
         console.log('Calling signUp function');
@@ -82,6 +94,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         console.log('signUp response:', { success, error, data: data ? 'data object' : undefined });
         
         if (success) {
+          // Restore tempMoodData if it existed before authentication
+          if (currentTempMoodData) {
+            console.log('Restoring tempMoodData after successful signup');
+            localStorage.setItem('tempMoodData', currentTempMoodData);
+          }
+          
           setSuccess('Account created successfully!');
           console.log('Signup successful, closing modal');
           // Close immediately rather than waiting
@@ -101,6 +119,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         console.log('signIn response:', { success, error });
         
         if (success) {
+          // Restore tempMoodData if it existed before authentication
+          if (currentTempMoodData) {
+            console.log('Restoring tempMoodData after successful signin');
+            localStorage.setItem('tempMoodData', currentTempMoodData);
+          }
+          
           setSuccess('Signed in successfully!');
           console.log('Sign in successful, closing modal');
           // Close immediately rather than waiting

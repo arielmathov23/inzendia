@@ -287,10 +287,13 @@ const DailyMoodTracking = () => {
   useEffect(() => {
     // If we have temp mood data and user is authenticated, save the mood entry
     if (isAuthenticated && user) {
+      console.log('User authenticated, checking for temp mood data');
+      
       // First check context tempMoodData, then fall back to localStorage
       const moodData = tempMoodData || (() => {
         try {
           const storedData = localStorage.getItem('tempMoodData');
+          console.log('Checking localStorage for tempMoodData:', storedData ? 'found' : 'not found');
           return storedData ? JSON.parse(storedData) : null;
         } catch (e) {
           console.error('Error parsing tempMoodData from localStorage:', e);
@@ -298,52 +301,27 @@ const DailyMoodTracking = () => {
         }
       })();
       
-      if (!moodData) return;
+      if (!moodData) {
+        console.log('No mood data found for authenticated user');
+        return;
+      }
+      
+      console.log('Found mood data for authenticated user:', moodData);
       
       // If reason is "No reason specified", show reason input modal again
       if (moodData.reason === "No reason specified") {
+        console.log('Mood data has no reason, showing reason input');
         setSelectedMood(moodData.mood);
         setShowReasonInput(true);
         // Keep temp data for later submission with proper reason
         return;
       }
       
-      const saveMoodToSupabase = async () => {
-        try {
-          // Don't use the stored ISO date from tempMoodData, always use today's date
-          // to prevent any timezone or future date issues
-          const currentDateOnly = getTodayDateOnly();
-          
-          // Insert into Supabase
-          const { error } = await supabase
-            .from('mood_entries')
-            .insert({
-              user_id: user.id,
-              mood_value: moodData.mood.value,
-              mood_label: moodData.mood.label,
-              mood_color: moodData.mood.color,
-              reason: moodData.reason,
-              date: currentDateOnly // Always use the current day in YYYY-MM-DD format
-            });
-            
-          if (error) throw error;
-          
-          // Set the mood data in state to ensure the UI shows the saved mood
-          setTodaysMood(moodData.mood);
-          setTodayMoodReason(moodData.reason);
-          setSubmittedToday(true);
-          
-          // Clear the temp data from both context and localStorage
-          clearTempMoodData();
-          localStorage.removeItem('tempMoodData');
-        } catch (error) {
-          console.error('Error saving mood to Supabase:', error);
-        }
-      };
-      
-      saveMoodToSupabase();
+      // Otherwise, save the mood entry with the existing reason
+      console.log('Mood data has reason, saving entry');
+      saveMoodEntry(true);
     }
-  }, [isAuthenticated, tempMoodData, user, clearTempMoodData]);
+  }, [isAuthenticated, user, tempMoodData]);
 
   // Cleanup any timers on unmount
   useEffect(() => {
@@ -494,11 +472,14 @@ const DailyMoodTracking = () => {
   };
 
   const saveMoodEntry = async (useTemp = false) => {
+    console.log('Saving mood entry, useTemp:', useTemp);
+    
     // Check context tempMoodData first, then fall back to localStorage if needed
     let contextTempMoodData = tempMoodData;
     if (useTemp && !contextTempMoodData) {
       try {
         const storedData = localStorage.getItem('tempMoodData');
+        console.log('Getting mood data from localStorage:', storedData ? 'found' : 'not found');
         contextTempMoodData = storedData ? JSON.parse(storedData) : null;
       } catch (e) {
         console.error('Error parsing tempMoodData from localStorage:', e);
@@ -509,7 +490,12 @@ const DailyMoodTracking = () => {
     const moodToSave = useTemp ? contextTempMoodData?.mood : selectedMood;
     const reasonToSave = useTemp ? contextTempMoodData?.reason : moodReason.trim() || 'No reason specified';
     
-    if (!moodToSave) return;
+    console.log('Mood to save:', moodToSave?.label, 'Reason:', reasonToSave);
+    
+    if (!moodToSave) {
+      console.log('No mood to save, aborting');
+      return;
+    }
     
     // Always use today's date for consistency and to prevent timezone issues
     const currentDateOnly = getTodayDateOnly();
@@ -528,6 +514,8 @@ const DailyMoodTracking = () => {
       if (isAuthenticated && user && (tempMoodData || contextTempMoodData) && 
           (tempMoodData?.reason === "No reason specified" || contextTempMoodData?.reason === "No reason specified")) {
         
+        console.log('Updating mood entry with reason for authenticated user');
+        
         // Use the mood data from either context or localStorage
         const moodDataToUse = tempMoodData || contextTempMoodData;
         
@@ -543,7 +531,12 @@ const DailyMoodTracking = () => {
             date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
           });
           
-        if (error) throw error;
+        if (error) {
+          console.error('Error inserting mood entry:', error);
+          throw error;
+        }
+        
+        console.log('Successfully saved mood entry with reason');
         
         // Update UI
         setTodaysMood(moodDataToUse.mood);
