@@ -488,7 +488,7 @@ const DailyMoodTracking = () => {
     
     // Use temp data if provided (from auth flow) or current state
     const moodToSave = useTemp ? contextTempMoodData?.mood : selectedMood;
-    const reasonToSave = useTemp ? contextTempMoodData?.reason : moodReason.trim() || 'No reason specified';
+    const reasonToSave = useTemp ? (contextTempMoodData?.reason !== 'No reason specified' ? contextTempMoodData?.reason : moodReason.trim() || 'No reason specified') : (moodReason.trim() || 'No reason specified');
     
     console.log('Mood to save:', moodToSave?.label, 'Reason:', reasonToSave);
     
@@ -511,47 +511,50 @@ const DailyMoodTracking = () => {
     
     try {
       // For newly authenticated users updating their reason
-      if (isAuthenticated && user && (tempMoodData || contextTempMoodData) && 
-          (tempMoodData?.reason === "No reason specified" || contextTempMoodData?.reason === "No reason specified")) {
+      if (isAuthenticated && user && tempMoodData) {
+        console.log('Authenticated user with mood data. Reason input state:', moodReason);
         
-        console.log('Updating mood entry with reason for authenticated user');
-        
-        // Use the mood data from either context or localStorage
-        const moodDataToUse = tempMoodData || contextTempMoodData;
-        
-        // Insert into Supabase with the updated reason and current date
-        const { error } = await supabase
-          .from('mood_entries')
-          .insert({
-            user_id: user.id,
-            mood_value: moodDataToUse.mood.value,
-            mood_label: moodDataToUse.mood.label,
-            mood_color: moodDataToUse.mood.color,
-            reason: moodReason.trim() || 'No reason specified',
-            date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
-          });
+        // Check if this is the case where we're updating a reason
+        if (tempMoodData.reason === "No reason specified" || moodReason) {
+          console.log('Updating mood entry with reason for authenticated user');
           
-        if (error) {
-          console.error('Error inserting mood entry:', error);
-          throw error;
+          // Use provided reason or temp data reason
+          const finalReason = moodReason.trim() || 'No reason specified';
+          
+          // Insert into Supabase with the updated reason and current date
+          const { error } = await supabase
+            .from('mood_entries')
+            .insert({
+              user_id: user.id,
+              mood_value: tempMoodData.mood.value,
+              mood_label: tempMoodData.mood.label,
+              mood_color: tempMoodData.mood.color,
+              reason: finalReason,
+              date: currentDateOnly // Always use YYYY-MM-DD format for Supabase
+            });
+            
+          if (error) {
+            console.error('Error inserting mood entry:', error);
+            throw error;
+          }
+          
+          console.log('Successfully saved mood entry with reason:', finalReason);
+          
+          // Update UI
+          setTodaysMood(tempMoodData.mood);
+          setTodayMoodReason(finalReason);
+          setSubmittedToday(true);
+          setShowReasonInput(false);
+          clearTempMoodData();
+          localStorage.removeItem('tempMoodData');
+          
+          // Reset confirmation animation after some time
+          setTimeout(() => {
+            setConfirmationAnimating(false);
+          }, 1500);
+          
+          return;
         }
-        
-        console.log('Successfully saved mood entry with reason');
-        
-        // Update UI
-        setTodaysMood(moodDataToUse.mood);
-        setTodayMoodReason(moodReason.trim() || 'No reason specified');
-        setSubmittedToday(true);
-        setShowReasonInput(false);
-        clearTempMoodData();
-        localStorage.removeItem('tempMoodData');
-        
-        // Reset confirmation animation after some time
-        setTimeout(() => {
-          setConfirmationAnimating(false);
-        }, 1500);
-        
-        return;
       }
       
       // Save to localStorage for anonymous users

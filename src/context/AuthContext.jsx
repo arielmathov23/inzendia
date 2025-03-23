@@ -9,6 +9,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tempMoodData, setTempMoodData] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
 
   // Load temp mood data from localStorage on initial load
   useEffect(() => {
@@ -137,108 +139,150 @@ export function AuthProvider({ children }) {
   
   // Sign up with email and password
   const signUp = async (email, password) => {
+    console.log('Starting signup process for:', email);
+    setAuthLoading(true);
+    
+    // Preserve any current tempMoodData before signup
+    let currentTempMoodData = null;
     try {
-      console.log('Starting signup process in AuthContext');
-      
-      // Don't sign out first - this is causing problems
-      // await supabase.auth.signOut();
+      const storedData = localStorage.getItem('tempMoodData');
+      if (storedData) {
+        currentTempMoodData = JSON.parse(storedData);
+        console.log('Preserved tempMoodData before signup:', currentTempMoodData);
+      }
+    } catch (e) {
+      console.error('Error parsing tempMoodData during signup:', e);
+    }
+    
+    try {
+      // First clear any existing sessions to avoid conflicts
+      await supabase.auth.signOut();
       
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
       });
       
-      console.log('Signup API response:', { success: !error, errorMessage: error?.message });
-      
       if (error) throw error;
       
-      // Update auth state
+      // Update user state if we got a user back
       if (data?.user) {
-        console.log('User created, updating state');
+        console.log('User signed up successfully, creating profile...');
         setUser(data.user);
         
-        // Create user profile after successful signup - using upsert to handle potential conflicts
-        if (data.user.id) {
-          console.log('Creating user profile');
+        try {
+          // Create a user profile in the user_profiles table
           const { error: profileError } = await supabase
             .from('user_profiles')
             .upsert([
-              { 
+              {
                 id: data.user.id,
-                display_name: email.split('@')[0], // Default display name from email
-                email: email // Store email in user_profiles table
-              }
-            ], { onConflict: 'id' });
-          
+                email: data.user.email,
+                created_at: new Date().toISOString(),
+              },
+            ]);
+            
           if (profileError) {
             console.error('Error creating user profile:', profileError);
           } else {
-            console.log('User profile created successfully');
+            console.log('User profile created successfully.');
           }
+        } catch (profileError) {
+          console.error('Exception creating user profile:', profileError);
         }
-      } else {
-        console.log('No user returned from signup API');
+        
+        // Restore saved tempMoodData after successful signup
+        if (currentTempMoodData) {
+          console.log('Restoring tempMoodData after signup:', currentTempMoodData);
+          setTempMoodData(currentTempMoodData);
+          localStorage.setItem('tempMoodData', JSON.stringify(currentTempMoodData));
+        }
       }
-      
-      return { success: true, data };
     } catch (error) {
-      console.error('Sign up error:', error);
-      return { success: false, error: error.message };
+      console.error('Signup error:', error);
+      setAuthError(error.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
   
   // Sign in with email and password
   const signIn = async (email, password) => {
+    console.log('Starting signin process for:', email);
+    setAuthLoading(true);
+    
+    // Preserve any current tempMoodData before signin
+    let currentTempMoodData = null;
     try {
-      console.log('Starting signin process in AuthContext');
-      
-      // Don't sign out first - this is causing problems
-      // await supabase.auth.signOut();
+      const storedData = localStorage.getItem('tempMoodData');
+      if (storedData) {
+        currentTempMoodData = JSON.parse(storedData);
+        console.log('Preserved tempMoodData before signin:', currentTempMoodData);
+      }
+    } catch (e) {
+      console.error('Error parsing tempMoodData during signin:', e);
+    }
+    
+    try {
+      // First clear any existing sessions to avoid conflicts
+      await supabase.auth.signOut();
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
-      console.log('Signin API response:', { success: !error, errorMessage: error?.message });
-      
       if (error) throw error;
       
-      // Update auth state
+      // Update user state if we got a user back
       if (data?.user) {
-        console.log('Setting user state after successful login');
+        console.log('User signed in successfully, checking profile...');
         setUser(data.user);
         
-        // Fetch and update the user profile with email if it's missing
-        if (data.user.id) {
-          console.log('Checking/updating user profile');
-          const { data: profile, error: profileError } = await supabase
+        // Check if user has a profile, and if not create one
+        try {
+          const { data: profileData, error: profileError } = await supabase
             .from('user_profiles')
             .select('email')
-            .eq('id', data.user.id);
-          
-          if (!profileError && profile && profile.length > 0 && (!profile[0].email || profile[0].email === null)) {
-            // Update the profile with the email used to sign in
-            const { error: updateError } = await supabase
-              .from('user_profiles')
-              .update({ email: email })
-              .eq('id', data.user.id);
+            .eq('id', data.user.id)
+            .single();
             
-            if (updateError) {
-              console.error('Error updating user profile with email:', updateError);
+          if (profileError || !profileData?.email) {
+            console.log('Profile not found or missing email, creating/updating...');
+            
+            // Create/update user profile
+            const { error: upsertError } = await supabase
+              .from('user_profiles')
+              .upsert([
+                {
+                  id: data.user.id,
+                  email: data.user.email,
+                  updated_at: new Date().toISOString(),
+                },
+              ]);
+              
+            if (upsertError) {
+              console.error('Error creating/updating user profile:', upsertError);
             } else {
-              console.log('User profile updated with email');
+              console.log('User profile created/updated successfully.');
             }
           }
+        } catch (profileError) {
+          console.error('Exception checking/creating user profile:', profileError);
         }
-      } else {
-        console.log('No user returned from signin API');
+        
+        // Restore saved tempMoodData after successful signin
+        if (currentTempMoodData) {
+          console.log('Restoring tempMoodData after signin:', currentTempMoodData);
+          setTempMoodData(currentTempMoodData);
+          localStorage.setItem('tempMoodData', JSON.stringify(currentTempMoodData));
+        }
       }
-      
-      return { success: true, data };
     } catch (error) {
-      console.error('Sign in error:', error);
-      return { success: false, error: error.message };
+      console.error('Signin error:', error);
+      setAuthError(error.message);
+    } finally {
+      setAuthLoading(false);
     }
   };
   
@@ -339,6 +383,8 @@ export function AuthProvider({ children }) {
     storeTempMoodData,
     clearTempMoodData,
     isAuthenticated: !!user,
+    authLoading,
+    authError,
   };
   
   return (
