@@ -30,14 +30,20 @@ export function AuthProvider({ children }) {
         const { data: { session } } = await supabase.auth.getSession();
         console.log('Initial session check result:', !!session);
         
-        setUser(session?.user || null);
-        
-        // If user is logged in, ensure their profile has the email
-        if (session?.user?.id) {
-          updateUserProfileWithEmail(session.user.id, session.user.email);
+        if (session?.user) {
+          console.log('Setting user from initial session', session.user.email);
+          setUser(session.user);
+          
+          // If user is logged in, ensure their profile has the email
+          if (session.user.id) {
+            await updateUserProfileWithEmail(session.user.id, session.user.email);
+          }
+        } else {
+          setUser(null);
         }
       } catch (error) {
         console.error('Error checking auth session:', error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -48,19 +54,19 @@ export function AuthProvider({ children }) {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, !!session);
+        console.log('Auth state changed:', event, session?.user?.email);
         
-        setUser(session?.user || null);
-        
-        // If user is logged in, ensure their profile has the email
-        if (session?.user?.id) {
-          // For Google OAuth events, make sure to create a profile
-          if (event === 'SIGNED_IN' && session?.user?.app_metadata?.provider === 'google') {
-            await updateUserProfileWithEmail(session.user.id, session.user.email);
-          } else {
-            // For regular email/password auth
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            setUser(session.user);
+            
+            // Ensure profile is updated with email
             await updateUserProfileWithEmail(session.user.id, session.user.email);
           }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        } else if (event === 'USER_UPDATED') {
+          setUser(session?.user || null);
         }
         
         setLoading(false);
@@ -111,6 +117,9 @@ export function AuthProvider({ children }) {
   // Sign up with email and password
   const signUp = async (email, password) => {
     try {
+      // First clear any existing sessions
+      await supabase.auth.signOut();
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -134,23 +143,13 @@ export function AuthProvider({ children }) {
           console.error('Error creating user profile:', profileError);
         }
         
-        // Also store email in session data for immediate access
-        if (data.session) {
-          data.session.email = email;
-          
-          // Update user state immediately to trigger UI updates
-          setUser(data.user);
-        }
-        
-        // Refresh the session to ensure all data is up to date
-        const { data: refreshData } = await supabase.auth.refreshSession();
-        if (refreshData?.user) {
-          setUser(refreshData.user);
-        }
+        // Update user state immediately
+        setUser(data.user);
       }
       
       return { success: true, data };
     } catch (error) {
+      console.error('Sign up error:', error);
       return { success: false, error: error.message };
     }
   };
@@ -158,12 +157,20 @@ export function AuthProvider({ children }) {
   // Sign in with email and password
   const signIn = async (email, password) => {
     try {
+      // First clear any existing sessions
+      await supabase.auth.signOut();
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
       if (error) throw error;
+      
+      // Update user state immediately
+      if (data?.user) {
+        setUser(data.user);
+      }
       
       // Fetch and update the user profile with email if it's missing
       if (data?.user?.id) {
@@ -187,6 +194,7 @@ export function AuthProvider({ children }) {
       
       return { success: true, data };
     } catch (error) {
+      console.error('Sign in error:', error);
       return { success: false, error: error.message };
     }
   };

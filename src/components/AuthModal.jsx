@@ -17,16 +17,20 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
   
   useEffect(() => {
     // If user becomes authenticated and modal is open, handle success
-    if (user && isOpen && !loading) {
-      if (afterAuth) {
-        afterAuth();
-      } else {
-        // Close modal and refresh the page to update UI
-        onClose();
-        router.refresh();
-      }
+    if (user && isOpen) {
+      console.log('User authenticated, closing modal');
+      setLoading(false); // Ensure loading state is reset
+      
+      // Brief delay to show success message before closing
+      setTimeout(() => {
+        if (afterAuth) {
+          afterAuth();
+        } else {
+          onClose();
+        }
+      }, 500);
     }
-  }, [user, isOpen, loading, afterAuth, onClose, router]);
+  }, [user, isOpen, afterAuth, onClose]);
   
   useEffect(() => {
     // Reset form when modal opens
@@ -49,25 +53,21 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         const { success, error, data } = await signUp(email, password);
         if (success) {
           setSuccess('Account created successfully!');
-          // Force a router refresh to update authentication state in the UI
-          router.refresh();
-          // Brief delay before closing to show success message
-          setTimeout(() => {
-            if (afterAuth) {
-              afterAuth();
-            } else {
-              onClose();
-            }
-          }, 1000);
+          // Close immediately rather than waiting
+          if (afterAuth) {
+            afterAuth();
+          } else {
+            onClose();
+          }
         } else {
           setError(error || 'Failed to sign up. Please try again.');
+          setLoading(false);
         }
       } else {
         const { success, error } = await signIn(email, password);
         if (success) {
           setSuccess('Signed in successfully!');
-          // Force a router refresh to update authentication state in the UI
-          router.refresh();
+          // Close immediately rather than waiting
           if (afterAuth) {
             afterAuth();
           } else {
@@ -75,12 +75,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
           }
         } else {
           setError(error || 'Invalid email or password.');
+          setLoading(false);
         }
       }
     } catch (error) {
       setError('An unexpected error occurred. Please try again.');
       console.error('Auth error:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -97,14 +97,14 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         setLoading(false);
       }
       
-      // Only keep loading state active for 10 seconds to prevent UI getting stuck
-      // in case redirect doesn't happen
+      // Set a timeout to prevent UI getting stuck if redirect doesn't happen
       const timeoutId = setTimeout(() => {
         setLoading(false);
         setError('Sign-in is taking longer than expected. Please try again.');
       }, 10000);
       
-      // Clear timeout if component unmounts
+      // Google sign-in redirects to another page, so we don't need to handle success case here
+      // We just need to ensure the timeout is cleared if component unmounts
       return () => clearTimeout(timeoutId);
     } catch (error) {
       setError('An unexpected error occurred. Please try again.');
