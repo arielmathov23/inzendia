@@ -75,14 +75,16 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     
     console.log(`Starting ${mode} process with email: ${email}`);
     
-    // Save tempMoodData before auth to restore it after
+    // Store the current tempMoodData for restoration after authentication
     let tempMoodData = null;
     try {
       const storedData = localStorage.getItem('tempMoodData');
-      console.log('Storing tempMoodData before auth:', storedData);
-      tempMoodData = storedData;
-    } catch (e) {
-      console.error('Error accessing tempMoodData before auth:', e);
+      if (storedData) {
+        tempMoodData = JSON.parse(storedData);
+        console.log('Preserving temp mood data during authentication:', tempMoodData);
+      }
+    } catch (error) {
+      console.error('Error accessing temp mood data:', error);
     }
     
     try {
@@ -92,17 +94,16 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         console.log('signUp response:', { success, error, data: data ? 'data object' : undefined });
         
         if (success) {
-          // Restore tempMoodData after successful signup
+          // Restore tempMoodData if it was stored
           if (tempMoodData) {
-            console.log('Restoring tempMoodData after successful signup');
-            localStorage.setItem('tempMoodData', tempMoodData);
+            console.log('Restoring temp mood data after successful signup');
+            localStorage.setItem('tempMoodData', JSON.stringify(tempMoodData));
           }
           
           setSuccess('Account created successfully!');
           console.log('Signup successful, closing modal');
           // Close immediately rather than waiting
           if (afterAuth) {
-            console.log('Calling afterAuth callback from signup');
             afterAuth();
           } else {
             onClose();
@@ -118,17 +119,16 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         console.log('signIn response:', { success, error });
         
         if (success) {
-          // Restore tempMoodData after successful signin
+          // Restore tempMoodData if it was stored
           if (tempMoodData) {
-            console.log('Restoring tempMoodData after successful signin');
-            localStorage.setItem('tempMoodData', tempMoodData);
+            console.log('Restoring temp mood data after successful signin');
+            localStorage.setItem('tempMoodData', JSON.stringify(tempMoodData));
           }
           
           setSuccess('Signed in successfully!');
           console.log('Sign in successful, closing modal');
           // Close immediately rather than waiting
           if (afterAuth) {
-            console.log('Calling afterAuth callback from signin');
             afterAuth();
           } else {
             onClose();
