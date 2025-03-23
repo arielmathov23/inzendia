@@ -8,7 +8,7 @@ import LoginButton from './LoginButton';
 import ProfileDropdown from './ProfileDropdown';
 import AuthModal from './AuthModal';
 import supabase from '@/lib/supabase';
-import { toast } from 'react-hot-toast';
+import { toast, Toaster } from 'react-hot-toast';
 
 // Custom animations
 const customStyles = `
@@ -795,6 +795,7 @@ const DailyMoodTracking = () => {
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 pb-28 sm:p-6 sm:pb-28" style={{ backgroundColor: '#E5E4E0' }}>
+      <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
       {/* Custom animations */}
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
       
