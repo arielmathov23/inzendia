@@ -73,7 +73,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
         <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl bg-gradient-to-r from-[#DA7A59] via-[#D9C69C] to-[#778D5E]"></div>
         
         <h2 className="text-2xl font-semibold mb-6 font-cooper text-[#0C0907]">
-          {mode === 'signup' ? 'Join Pirca' : 'Welcome Back'}
+          {mode === 'signup' ? 'Join Pirca' : 'Welcome Back to Pirca'}
         </h2>
         
         {/* Form */}

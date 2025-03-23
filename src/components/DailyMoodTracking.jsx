@@ -229,16 +229,16 @@ const DailyMoodTracking = () => {
     // Check if already submitted today
     const checkTodaySubmission = async () => {
       try {
+        // Get the current date in local timezone as YYYY-MM-DD
+        const today = getTodayDateOnly();
+        
         // For authenticated users, check Supabase first
         if (isAuthenticated && user) {
-          const today = new Date();
-          const dateOnly = today.toISOString().split('T')[0];
-          
           const { data, error } = await supabase
             .from('mood_entries')
             .select('*')
             .eq('user_id', user.id)
-            .eq('date', dateOnly)
+            .eq('date', today)
             .single();
             
           if (error && error.code !== 'PGRST116') {
@@ -261,11 +261,12 @@ const DailyMoodTracking = () => {
         
         // Fall back to localStorage for guests or if no Supabase entry
         const entries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
-        const today = new Date().setHours(0, 0, 0, 0);
         
+        // Check for entry on the exact current date (YYYY-MM-DD)
         const todayEntry = entries.find(entry => {
-          const entryDate = new Date(entry.date).setHours(0, 0, 0, 0);
-          return entryDate === today;
+          const entryDate = new Date(entry.date);
+          const entryDateFormatted = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+          return entryDateFormatted === today;
         });
         
         if (todayEntry) {
@@ -370,18 +371,21 @@ const DailyMoodTracking = () => {
     // If user is not authenticated, store the mood data and show auth modal immediately
     if (!isAuthenticated) {
       // Store the mood data first with default reason
-    const entry = {
-      mood: mood,
+      // Use current date in local timezone
+      const today = getTodayDateOnly();
+      const currentDateISOString = getCurrentDateISOString();
+      const entry = {
+        mood: mood,
         reason: 'No reason specified',
-      date: new Date().toISOString()
-    };
+        date: currentDateISOString
+      };
     
-    // Save to localStorage
+      // Save to localStorage
       const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
-      const today = new Date().setHours(0, 0, 0, 0);
       const filteredEntries = existingEntries.filter(entry => {
-        const entryDate = new Date(entry.date).setHours(0, 0, 0, 0);
-        return entryDate !== today;
+        const entryDate = new Date(entry.date);
+        const entryDateFormatted = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+        return entryDateFormatted !== today;
       });
       
       filteredEntries.push(entry);
@@ -406,6 +410,66 @@ const DailyMoodTracking = () => {
     setShowReasonInput(true);
   };
 
+  const formatDate = () => {
+    const now = new Date();
+    // Ensure we're using the current date directly without timezone adjustments
+    return now.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      month: 'long', 
+      day: 'numeric',
+    });
+  };
+
+  const getCurrentDateISOString = () => {
+    // Get the current date in local timezone
+    const now = new Date();
+    // Create a new date without time components
+    const localDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return localDate.toISOString();
+  };
+
+  const getTodayDateOnly = () => {
+    // Get current date in local timezone as YYYY-MM-DD format
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleResetData = () => {
+    try {
+      // Get existing entries
+      const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+      
+      // Remove today's entry based on YYYY-MM-DD format
+      const todayDateOnly = getTodayDateOnly();
+      const filteredEntries = existingEntries.filter(entry => {
+        const entryDate = new Date(entry.date);
+        const entryDateFormatted = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+        return entryDateFormatted !== todayDateOnly;
+      });
+      
+      // Save back to localStorage
+      localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
+      
+      // Reset all states including breathing exercise
+      setSubmittedToday(false);
+      setTodaysMood(null);
+      setCompletedExercise(false);
+      setTapCount(0);
+      setMoodReason('');
+      setShowReasonInput(false);
+      
+      // Close breathing modal if open
+      if (showBreathingExercise) {
+        closeBreathingModal();
+      }
+    } catch (error) {
+      console.error('Error resetting data:', error);
+    }
+  };
+
   const saveMoodEntry = async (useTemp = false) => {
     // Use temp data if provided (from auth flow) or current state
     const moodToSave = useTemp ? tempMoodData?.mood : selectedMood;
@@ -413,19 +477,20 @@ const DailyMoodTracking = () => {
     
     if (!moodToSave) return;
     
+    // Use the properly formatted current date in local timezone
+    const currentDateISOString = getCurrentDateISOString();
+    const currentDateOnly = getTodayDateOnly();
+    
     const entry = {
       mood: moodToSave,
       reason: reasonToSave,
-      date: new Date().toISOString()
+      date: currentDateISOString
     };
     
     try {
       // For newly authenticated users updating their reason
       if (isAuthenticated && user && tempMoodData && tempMoodData.reason === "No reason specified") {
-        // Format the date as YYYY-MM-DD
-        const dateOnly = new Date(tempMoodData.date).toISOString().split('T')[0];
-        
-        // Insert into Supabase with the updated reason
+        // Insert into Supabase with the updated reason and current date
         const { error } = await supabase
           .from('mood_entries')
           .insert({
@@ -434,7 +499,7 @@ const DailyMoodTracking = () => {
             mood_label: tempMoodData.mood.label,
             mood_color: tempMoodData.mood.color,
             reason: moodReason.trim() || 'No reason specified',
-            date: dateOnly
+            date: currentDateOnly
           });
           
         if (error) throw error;
@@ -456,18 +521,19 @@ const DailyMoodTracking = () => {
       
       // Save to localStorage for anonymous users
       if (!isAuthenticated) {
-      const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+        const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
       
-      // Filter out any existing entries from today
-      const today = new Date().setHours(0, 0, 0, 0);
-      const filteredEntries = existingEntries.filter(entry => {
-        const entryDate = new Date(entry.date).setHours(0, 0, 0, 0);
-        return entryDate !== today;
-      });
+        // Filter out any existing entries from today (using YYYY-MM-DD format comparison)
+        const todayDateOnly = getTodayDateOnly();
+        const filteredEntries = existingEntries.filter(entry => {
+          const entryDate = new Date(entry.date);
+          const entryDateFormatted = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`;
+          return entryDateFormatted !== todayDateOnly;
+        });
       
         // Add new entry and store temp data for after auth
-      filteredEntries.push(entry);
-      localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
+        filteredEntries.push(entry);
+        localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
         
         // Store for post-auth saving
         storeTempMoodData(entry);
@@ -494,10 +560,7 @@ const DailyMoodTracking = () => {
       } 
       // Save to Supabase for authenticated users
       else if (user) {
-        // Convert date to YYYY-MM-DD format for the date column
-        const dateOnly = new Date(entry.date).toISOString().split('T')[0];
-        
-        // Insert into Supabase
+        // Insert into Supabase using current date
         const { error } = await supabase
           .from('mood_entries')
           .insert({
@@ -506,7 +569,7 @@ const DailyMoodTracking = () => {
             mood_label: entry.mood.label,
             mood_color: entry.mood.color,
             reason: entry.reason,
-            date: dateOnly
+            date: currentDateOnly
           });
           
         if (error) throw error;
@@ -560,46 +623,21 @@ const DailyMoodTracking = () => {
     // Otherwise, the mood will be saved via the useEffect that watches for tempMoodData and isAuthenticated
   };
 
-  const formatDate = () => {
-    const now = new Date();
-    return now.toLocaleDateString('en-US', { 
-      weekday: 'long',
-      month: 'long', 
-      day: 'numeric'
-    });
+  // Function to clear local storage data when signing out
+  const clearGuestData = () => {
+    localStorage.removeItem('moodEntries');
+    setSubmittedToday(false);
+    setTodaysMood(null);
+    setTodayMoodReason('');
   };
 
-  const handleResetData = () => {
-    try {
-      // Get existing entries
-      const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
-      
-      // Remove today's entry
-      const today = new Date().setHours(0, 0, 0, 0);
-      const filteredEntries = existingEntries.filter(entry => {
-        const entryDate = new Date(entry.date).setHours(0, 0, 0, 0);
-        return entryDate !== today;
-      });
-      
-      // Save back to localStorage
-      localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
-      
-      // Reset all states including breathing exercise
-      setSubmittedToday(false);
-      setTodaysMood(null);
-      setCompletedExercise(false);
-      setTapCount(0);
-      setMoodReason('');
-      setShowReasonInput(false);
-      
-      // Close breathing modal if open
-      if (showBreathingExercise) {
-        closeBreathingModal();
-      }
-    } catch (error) {
-      console.error('Error resetting data:', error);
+  // Add useEffect to listen for auth state changes
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // User has logged out - clear guest data
+      clearGuestData();
     }
-  };
+  }, [isAuthenticated]);
 
   // Start breathing exercise
   const startBreathingExercise = () => {
