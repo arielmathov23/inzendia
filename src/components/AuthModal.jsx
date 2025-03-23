@@ -19,16 +19,23 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     // If user becomes authenticated and modal is open, handle success
     if (user && isOpen) {
       console.log('User authenticated, closing modal');
-      setLoading(false); // Ensure loading state is reset
       
-      // Brief delay to show success message before closing
-      setTimeout(() => {
+      // Reset form state
+      setLoading(false);
+      setError('');
+      setSuccess('Authentication successful!');
+      
+      // Close the modal with a short delay
+      const closeTimeout = setTimeout(() => {
+        console.log('Closing auth modal after successful auth');
         if (afterAuth) {
           afterAuth();
         } else {
           onClose();
         }
       }, 500);
+      
+      return () => clearTimeout(closeTimeout);
     }
   }, [user, isOpen, afterAuth, onClose]);
   
@@ -43,16 +50,40 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     }
   }, [isOpen, initialMode]);
   
+  // Add safety timeout to reset loading state
+  useEffect(() => {
+    let timeoutId;
+    
+    if (loading) {
+      // If loading state persists for more than 10 seconds, reset it
+      timeoutId = setTimeout(() => {
+        console.log('Auth operation timeout - resetting loading state');
+        setLoading(false);
+        setError('The operation is taking longer than expected. Please try again.');
+      }, 10000);
+    }
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [loading]);
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     
+    console.log(`Starting ${mode} process with email: ${email}`);
+    
     try {
       if (mode === 'signup') {
+        console.log('Calling signUp function');
         const { success, error, data } = await signUp(email, password);
+        console.log('signUp response:', { success, error, data: data ? 'data object' : undefined });
+        
         if (success) {
           setSuccess('Account created successfully!');
+          console.log('Signup successful, closing modal');
           // Close immediately rather than waiting
           if (afterAuth) {
             afterAuth();
@@ -60,13 +91,18 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
             onClose();
           }
         } else {
+          console.log('Signup failed:', error);
           setError(error || 'Failed to sign up. Please try again.');
           setLoading(false);
         }
       } else {
+        console.log('Calling signIn function');
         const { success, error } = await signIn(email, password);
+        console.log('signIn response:', { success, error });
+        
         if (success) {
           setSuccess('Signed in successfully!');
+          console.log('Sign in successful, closing modal');
           // Close immediately rather than waiting
           if (afterAuth) {
             afterAuth();
@@ -74,13 +110,14 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
             onClose();
           }
         } else {
+          console.log('Sign in failed:', error);
           setError(error || 'Invalid email or password.');
           setLoading(false);
         }
       }
     } catch (error) {
-      setError('An unexpected error occurred. Please try again.');
       console.error('Auth error:', error);
+      setError('An unexpected error occurred. Please try again.');
       setLoading(false);
     }
   };

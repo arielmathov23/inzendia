@@ -27,8 +27,16 @@ export function AuthProvider({ children }) {
     const checkUser = async () => {
       try {
         console.log('Checking initial session...');
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Initial session check result:', !!session);
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+        
+        console.log('Initial session check result:', !!session, session?.user?.email);
         
         if (session?.user) {
           console.log('Setting user from initial session', session.user.email);
@@ -39,6 +47,7 @@ export function AuthProvider({ children }) {
             await updateUserProfileWithEmail(session.user.id, session.user.email);
           }
         } else {
+          console.log('No active session found');
           setUser(null);
         }
       } catch (error) {
@@ -56,16 +65,28 @@ export function AuthProvider({ children }) {
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (event === 'SIGNED_IN') {
+          console.log('User signed in event detected');
           if (session?.user) {
             setUser(session.user);
             
             // Ensure profile is updated with email
             await updateUserProfileWithEmail(session.user.id, session.user.email);
           }
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed event detected');
+          if (session?.user) {
+            setUser(session.user);
+          }
         } else if (event === 'SIGNED_OUT') {
+          console.log('User signed out event detected');
           setUser(null);
         } else if (event === 'USER_UPDATED') {
+          console.log('User updated event detected');
+          setUser(session?.user || null);
+        } else {
+          console.log('Unhandled auth event:', event);
+          // Default fallback - update user state based on session
           setUser(session?.user || null);
         }
         
@@ -117,34 +138,46 @@ export function AuthProvider({ children }) {
   // Sign up with email and password
   const signUp = async (email, password) => {
     try {
-      // First clear any existing sessions
-      await supabase.auth.signOut();
+      console.log('Starting signup process in AuthContext');
+      
+      // Don't sign out first - this is causing problems
+      // await supabase.auth.signOut();
       
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
       });
       
+      console.log('Signup API response:', { success: !error, errorMessage: error?.message });
+      
       if (error) throw error;
       
-      // Create user profile after successful signup - using upsert to handle potential conflicts
-      if (data?.user?.id) {
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .upsert([
-            { 
-              id: data.user.id,
-              display_name: email.split('@')[0], // Default display name from email
-              email: email // Store email in user_profiles table
-            }
-          ], { onConflict: 'id' });
-        
-        if (profileError) {
-          console.error('Error creating user profile:', profileError);
-        }
-        
-        // Update user state immediately
+      // Update auth state
+      if (data?.user) {
+        console.log('User created, updating state');
         setUser(data.user);
+        
+        // Create user profile after successful signup - using upsert to handle potential conflicts
+        if (data.user.id) {
+          console.log('Creating user profile');
+          const { error: profileError } = await supabase
+            .from('user_profiles')
+            .upsert([
+              { 
+                id: data.user.id,
+                display_name: email.split('@')[0], // Default display name from email
+                email: email // Store email in user_profiles table
+              }
+            ], { onConflict: 'id' });
+          
+          if (profileError) {
+            console.error('Error creating user profile:', profileError);
+          } else {
+            console.log('User profile created successfully');
+          }
+        }
+      } else {
+        console.log('No user returned from signup API');
       }
       
       return { success: true, data };
@@ -157,39 +190,49 @@ export function AuthProvider({ children }) {
   // Sign in with email and password
   const signIn = async (email, password) => {
     try {
-      // First clear any existing sessions
-      await supabase.auth.signOut();
+      console.log('Starting signin process in AuthContext');
+      
+      // Don't sign out first - this is causing problems
+      // await supabase.auth.signOut();
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
+      console.log('Signin API response:', { success: !error, errorMessage: error?.message });
+      
       if (error) throw error;
       
-      // Update user state immediately
+      // Update auth state
       if (data?.user) {
+        console.log('Setting user state after successful login');
         setUser(data.user);
-      }
-      
-      // Fetch and update the user profile with email if it's missing
-      if (data?.user?.id) {
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('email')
-          .eq('id', data.user.id);
         
-        if (!profileError && profile && profile.length > 0 && (!profile[0].email || profile[0].email === null)) {
-          // Update the profile with the email used to sign in
-          const { error: updateError } = await supabase
+        // Fetch and update the user profile with email if it's missing
+        if (data.user.id) {
+          console.log('Checking/updating user profile');
+          const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
-            .update({ email: email })
+            .select('email')
             .eq('id', data.user.id);
           
-          if (updateError) {
-            console.error('Error updating user profile with email:', updateError);
+          if (!profileError && profile && profile.length > 0 && (!profile[0].email || profile[0].email === null)) {
+            // Update the profile with the email used to sign in
+            const { error: updateError } = await supabase
+              .from('user_profiles')
+              .update({ email: email })
+              .eq('id', data.user.id);
+            
+            if (updateError) {
+              console.error('Error updating user profile with email:', updateError);
+            } else {
+              console.log('User profile updated with email');
+            }
           }
         }
+      } else {
+        console.log('No user returned from signin API');
       }
       
       return { success: true, data };
