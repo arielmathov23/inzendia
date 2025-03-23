@@ -215,6 +215,7 @@ const DailyMoodTracking = () => {
   const [autoStartCountdown, setAutoStartCountdown] = useState(4);
   const autoStartRef = useRef(null);
   const [todayMoodReason, setTodayMoodReason] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   
   const { user, isAuthenticated, storeTempMoodData, tempMoodData, clearTempMoodData } = useAuth();
 
@@ -1311,7 +1312,10 @@ const DailyMoodTracking = () => {
                   <button
                     key={topic}
                     className="px-3 py-1 bg-[#8A8BDE]/10 text-[#8A8BDE] rounded-full text-sm hover:bg-[#8A8BDE]/20 transition-colors"
-                    onClick={() => setMoodReason(prev => prev ? `${prev}, ${topic.toLowerCase()}` : topic.toLowerCase())}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setMoodReason(prev => prev ? `${prev}, ${topic.toLowerCase()}` : topic.toLowerCase());
+                    }}
                   >
                     {topic}
                   </button>
@@ -1336,12 +1340,43 @@ const DailyMoodTracking = () => {
               {isAuthenticated ? (
                 <button
                   className="px-6 py-2 bg-[#8A8BDE] text-white rounded-md hover:bg-[#8A8BDE]/90 transition-colors active:scale-95"
-                  onClick={() => {
-                    // Fix: Don't use temp data when selectedMood is available directly
-                    saveMoodEntry(selectedMood ? false : true);
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsSaving(true);
+                    setTimeout(() => {
+                      if (selectedMood) {
+                        const currentReason = moodReason.trim() || 'No reason specified';
+                        supabase
+                          .from('mood_entries')
+                          .insert({
+                            user_id: user.id,
+                            mood_value: selectedMood.value,
+                            mood_label: selectedMood.label,
+                            mood_color: selectedMood.color,
+                            reason: currentReason,
+                            date: getTodayDateOnly()
+                          })
+                          .then(({ error }) => {
+                            if (error) {
+                              console.error('Error saving mood entry:', error);
+                              setIsSaving(false);
+                              return;
+                            }
+                            
+                            setTodaysMood(selectedMood);
+                            setTodayMoodReason(currentReason);
+                            setSubmittedToday(true);
+                            setShowReasonInput(false);
+                            setConfirmationAnimating(false);
+                            setIsSaving(false);
+                          });
+                      } else {
+                        saveMoodEntry(true);
+                      }
+                    }, 100);
                   }}
                 >
-                  Save
+                  {isSaving ? 'Saving...' : 'Save'}
                 </button>
               ) : (
                 <div className="flex space-x-2">
