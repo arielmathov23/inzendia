@@ -254,6 +254,10 @@ const DailyMoodTracking = () => {
             });
             setTodayMoodReason(data[0].reason || 'No reason specified');
             setSubmittedToday(true);
+            
+            // Ensure reason input modal is closed if we've submitted today
+            setShowReasonInput(false);
+            
             setLoading(false);
             return;
           }
@@ -273,6 +277,9 @@ const DailyMoodTracking = () => {
           setTodaysMood(todayEntry.mood);
           setTodayMoodReason(todayEntry.reason || 'No reason specified');
           setSubmittedToday(true);
+          
+          // Ensure reason input modal is closed if we've submitted today
+          setShowReasonInput(false);
         }
         
         setLoading(false);
@@ -284,6 +291,14 @@ const DailyMoodTracking = () => {
     
     checkTodaySubmission();
   }, [isAuthenticated, user, moods]);
+
+  // Add a dedicated effect to ensure modals are in the correct state based on submission status
+  useEffect(() => {
+    // If we've already submitted today, ensure modals are closed
+    if (submittedToday) {
+      setShowReasonInput(false);
+    }
+  }, [submittedToday]);
 
   useEffect(() => {
     // If we have temp mood data and user is authenticated, save the mood entry
