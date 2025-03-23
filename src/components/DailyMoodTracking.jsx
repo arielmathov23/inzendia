@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import LoginButton from './LoginButton';
+import ProfileDropdown from './ProfileDropdown';
+import AuthModal from './AuthModal';
+import supabase from '@/lib/supabase';
 
 // Custom animations
 const customStyles = `
@@ -195,6 +200,7 @@ const DailyMoodTracking = () => {
   const [moodReason, setMoodReason] = useState('');
   const [showReasonInput, setShowReasonInput] = useState(false);
   const [selectedMood, setSelectedMood] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const holdTimerRef = useRef(null);
   const progressIntervalRef = useRef(null);
   const router = useRouter();
@@ -208,6 +214,9 @@ const DailyMoodTracking = () => {
   const [completedExercise, setCompletedExercise] = useState(false);
   const [autoStartCountdown, setAutoStartCountdown] = useState(4);
   const autoStartRef = useRef(null);
+  const [todayMoodReason, setTodayMoodReason] = useState('');
+  
+  const { user, isAuthenticated, storeTempMoodData, tempMoodData, clearTempMoodData } = useAuth();
 
   // Update mood options with darker neutral color for better contrast
   const moods = [
@@ -218,8 +227,39 @@ const DailyMoodTracking = () => {
 
   useEffect(() => {
     // Check if already submitted today
-    const checkTodaySubmission = () => {
+    const checkTodaySubmission = async () => {
       try {
+        // For authenticated users, check Supabase first
+        if (isAuthenticated && user) {
+          const today = new Date();
+          const dateOnly = today.toISOString().split('T')[0];
+          
+          const { data, error } = await supabase
+            .from('mood_entries')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('date', dateOnly)
+            .single();
+            
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching mood entry from Supabase:', error);
+          }
+          
+          if (data) {
+            setTodaysMood({
+              value: data.mood_value,
+              label: data.mood_label,
+              color: data.mood_color,
+              description: moods.find(m => m.value === data.mood_value)?.description || ''
+            });
+            setTodayMoodReason(data.reason || 'No reason specified');
+            setSubmittedToday(true);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Fall back to localStorage for guests or if no Supabase entry
         const entries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
         const today = new Date().setHours(0, 0, 0, 0);
         
@@ -230,6 +270,7 @@ const DailyMoodTracking = () => {
         
         if (todayEntry) {
           setTodaysMood(todayEntry.mood);
+          setTodayMoodReason(todayEntry.reason || 'No reason specified');
           setSubmittedToday(true);
         }
         
@@ -241,7 +282,53 @@ const DailyMoodTracking = () => {
     };
     
     checkTodaySubmission();
-  }, []);
+  }, [isAuthenticated, user, moods]);
+
+  useEffect(() => {
+    // If we have temp mood data and user is authenticated, save the mood entry
+    if (tempMoodData && isAuthenticated && user) {
+      // If reason is "No reason specified", show reason input modal again
+      if (tempMoodData.reason === "No reason specified") {
+        setSelectedMood(tempMoodData.mood);
+        setShowReasonInput(true);
+        // Keep temp data for later submission with proper reason
+        return;
+      }
+      
+      const saveMoodToSupabase = async () => {
+        try {
+          // Format the date as YYYY-MM-DD
+          const dateOnly = new Date(tempMoodData.date).toISOString().split('T')[0];
+          
+          // Insert into Supabase
+          const { error } = await supabase
+            .from('mood_entries')
+            .insert({
+              user_id: user.id,
+              mood_value: tempMoodData.mood.value,
+              mood_label: tempMoodData.mood.label,
+              mood_color: tempMoodData.mood.color,
+              reason: tempMoodData.reason,
+              date: dateOnly
+            });
+            
+          if (error) throw error;
+          
+          // Set the mood data in state to ensure the UI shows the saved mood
+          setTodaysMood(tempMoodData.mood);
+          setTodayMoodReason(tempMoodData.reason);
+          setSubmittedToday(true);
+          
+          // Clear the temp data
+          clearTempMoodData();
+        } catch (error) {
+          console.error('Error saving mood to Supabase:', error);
+        }
+      };
+      
+      saveMoodToSupabase();
+    }
+  }, [isAuthenticated, tempMoodData, user, clearTempMoodData]);
 
   // Cleanup any timers on unmount
   useEffect(() => {
@@ -279,19 +366,96 @@ const DailyMoodTracking = () => {
   const completeMoodSelection = (mood) => {
     setConfirmationAnimating(true);
     setSelectedMood(mood);
-    setShowReasonInput(true);
-  };
-
-  const saveMoodEntry = () => {
-    // Create the entry with mood and reason
+    
+    // If user is not authenticated, store the mood data and show auth modal immediately
+    if (!isAuthenticated) {
+      // Store the mood data first with default reason
     const entry = {
-      mood: selectedMood,
-      reason: moodReason.trim() || `No reason specified`,
+      mood: mood,
+        reason: 'No reason specified',
       date: new Date().toISOString()
     };
     
     // Save to localStorage
+      const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+      const today = new Date().setHours(0, 0, 0, 0);
+      const filteredEntries = existingEntries.filter(entry => {
+        const entryDate = new Date(entry.date).setHours(0, 0, 0, 0);
+        return entryDate !== today;
+      });
+      
+      filteredEntries.push(entry);
+      localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
+      
+      // Store for post-auth saving
+      storeTempMoodData(entry);
+      
+      // Set UI state
+      setTodaysMood(mood);
+      setSubmittedToday(true);
+      
+      // Show auth modal to prompt sign up
+      setTimeout(() => {
+        setShowAuthModal(true);
+      }, 300);
+      
+      return;
+    }
+    
+    // For authenticated users, proceed to reason input
+    setShowReasonInput(true);
+  };
+
+  const saveMoodEntry = async (useTemp = false) => {
+    // Use temp data if provided (from auth flow) or current state
+    const moodToSave = useTemp ? tempMoodData?.mood : selectedMood;
+    const reasonToSave = useTemp ? tempMoodData?.reason : moodReason.trim() || 'No reason specified';
+    
+    if (!moodToSave) return;
+    
+    const entry = {
+      mood: moodToSave,
+      reason: reasonToSave,
+      date: new Date().toISOString()
+    };
+    
     try {
+      // For newly authenticated users updating their reason
+      if (isAuthenticated && user && tempMoodData && tempMoodData.reason === "No reason specified") {
+        // Format the date as YYYY-MM-DD
+        const dateOnly = new Date(tempMoodData.date).toISOString().split('T')[0];
+        
+        // Insert into Supabase with the updated reason
+        const { error } = await supabase
+          .from('mood_entries')
+          .insert({
+            user_id: user.id,
+            mood_value: tempMoodData.mood.value,
+            mood_label: tempMoodData.mood.label,
+            mood_color: tempMoodData.mood.color,
+            reason: moodReason.trim() || 'No reason specified',
+            date: dateOnly
+          });
+          
+        if (error) throw error;
+        
+        // Update UI
+        setTodaysMood(tempMoodData.mood);
+        setTodayMoodReason(moodReason.trim() || 'No reason specified');
+        setSubmittedToday(true);
+        setShowReasonInput(false);
+        clearTempMoodData();
+        
+        // Reset confirmation animation after some time
+        setTimeout(() => {
+          setConfirmationAnimating(false);
+        }, 1500);
+        
+        return;
+      }
+      
+      // Save to localStorage for anonymous users
+      if (!isAuthenticated) {
       const existingEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
       
       // Filter out any existing entries from today
@@ -301,15 +465,59 @@ const DailyMoodTracking = () => {
         return entryDate !== today;
       });
       
-      // Add new entry
+        // Add new entry and store temp data for after auth
       filteredEntries.push(entry);
-      
-      // Save back to localStorage
       localStorage.setItem('moodEntries', JSON.stringify(filteredEntries));
+        
+        // Store for post-auth saving
+        storeTempMoodData(entry);
+        
+        // Set mood state and close reason input
+        setTodaysMood(moodToSave);
+        setTodayMoodReason(reasonToSave);
+        setSubmittedToday(true);
+        setActiveSelection(null);
+        setConfirmProgress(0);
+        setShowReasonInput(false);
+        
+        // Show authentication modal after saving as guest
+        setTimeout(() => {
+          setShowAuthModal(true);
+        }, 600);
+        
+        // Reset confirmation animation after some time
+        setTimeout(() => {
+          setConfirmationAnimating(false);
+        }, 1500);
+        
+        return;
+      } 
+      // Save to Supabase for authenticated users
+      else if (user) {
+        // Convert date to YYYY-MM-DD format for the date column
+        const dateOnly = new Date(entry.date).toISOString().split('T')[0];
+        
+        // Insert into Supabase
+        const { error } = await supabase
+          .from('mood_entries')
+          .insert({
+            user_id: user.id,
+            mood_value: entry.mood.value,
+            mood_label: entry.mood.label,
+            mood_color: entry.mood.color,
+            reason: entry.reason,
+            date: dateOnly
+          });
+          
+        if (error) throw error;
+        
+        // Update the reason state
+        setTodayMoodReason(entry.reason);
+      }
       
       // Set mood and trigger animation
       setTimeout(() => {
-        setTodaysMood(selectedMood);
+        setTodaysMood(moodToSave);
         setSubmittedToday(true);
         setActiveSelection(null);
         setConfirmProgress(0);
@@ -326,6 +534,30 @@ const DailyMoodTracking = () => {
       setConfirmProgress(0);
       setShowReasonInput(false);
     }
+  };
+
+  const handleSaveMoodWithAuth = () => {
+    // Store mood data temporarily
+    storeTempMoodData({
+      mood: selectedMood,
+      reason: moodReason
+    });
+    
+    // Show auth modal
+    setShowAuthModal(true);
+    setShowReasonInput(false);
+  };
+
+  const handleAfterAuth = () => {
+    setShowAuthModal(false);
+    
+    // If user just signed up and we have temp mood data with no reason,
+    // show the reason input modal to complete their entry
+    if (isAuthenticated && tempMoodData && tempMoodData.reason === "No reason specified") {
+      setSelectedMood(tempMoodData.mood);
+      setShowReasonInput(true);
+    }
+    // Otherwise, the mood will be saved via the useEffect that watches for tempMoodData and isAuthenticated
   };
 
   const formatDate = () => {
@@ -557,18 +789,12 @@ const DailyMoodTracking = () => {
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Daily Mood Tracking</h1>
             <p className="text-sm sm:text-base text-[#0C0907]/70 mt-1">{formatDate()}</p>
           </div>
-          <button
-            onClick={handleResetData}
-            className="text-[#DA7A59] hover:text-[#DA7A59]/80 p-2 rounded-full transition-colors"
-            title="Developer tool: reset data"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="opacity-75">
-              <path d="M3 6h18"></path>
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-            </svg>
-          </button>
+          <div className="flex items-center space-x-2">
+            <LoginButton />
+          </div>
         </header>
+        
+    
 
         {loading ? (
           <div className="flex justify-center items-center h-60">
@@ -582,7 +808,7 @@ const DailyMoodTracking = () => {
                 className={`rounded-xl p-6 overflow-hidden relative ${confirmationAnimating ? 'animate-fade-in' : ''}`} 
                 style={{ backgroundColor: '#F0EFEB' }}
               >
-                {/* Large decorative circle */}
+                {/* Large decorative circle - adjusted position */}
                 <div 
                   className="absolute -top-10 -right-10 opacity-10 transition-all duration-700 ease-out"
                   style={{ 
@@ -594,15 +820,16 @@ const DailyMoodTracking = () => {
                   }}
                 ></div>
                 
-                {/* Small decorative circles */}
+                {/* Small decorative circle - adjusted position */}
                 <div 
-                  className="absolute bottom-10 left-0 opacity-10 transition-all duration-700 ease-out"
+                  className="absolute bottom-10 left-10 opacity-10 transition-all duration-700 ease-out"
                   style={{ 
                     backgroundColor: todaysMood?.color || '#778D5E',
                     borderRadius: '50%',
                     width: '80px',
                     height: '80px',
                     transform: confirmationAnimating ? 'translateX(20px)' : 'translateX(0)',
+                    opacity: todaysMood?.value === 3 ? 0.15 : 0.1, // Increased opacity for Pleasant mood
                   }}
                 ></div>
                 
@@ -625,7 +852,7 @@ const DailyMoodTracking = () => {
                 <h2 className="text-2xl font-medium text-[#0C0907] mb-6 relative z-10 font-cooper">Today's Mood</h2>
                 
                 <div className="flex items-center relative z-10 mb-8">
-                  <div className="mr-4 flex flex-col items-center">
+                  <div className="mr-6 flex flex-col items-center">
                     <div 
                       className={`w-20 h-20 shadow-lg transition-transform duration-700 ease-out ${todaysMood?.value === 3 ? 'irregular-blob-high' : todaysMood?.value === 2 ? 'irregular-blob-neutral' : 'irregular-blob-low'}`}
                       style={{ 
@@ -662,34 +889,23 @@ const DailyMoodTracking = () => {
                 
                 <div 
                     className="bg-white/50 backdrop-blur-sm rounded-xl p-6 relative z-10 overflow-hidden transition-all duration-700 border border-white/60"
-                    style={{ 
-                      transform: confirmationAnimating ? 'translateY(5px)' : 'translateY(0)',
+                  style={{ 
+                    transform: confirmationAnimating ? 'translateY(5px)' : 'translateY(0)',
                       boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.03)'
+                  }}
+                >
+                  <div 
+                    className="absolute inset-0" 
+                    style={{ 
+                        background: todaysMood?.value === 3 
+                          ? `linear-gradient(135deg, ${todaysMood?.color || '#778D5E'}20, transparent 40%)` 
+                          : `linear-gradient(135deg, ${todaysMood?.color || '#778D5E'}10, transparent 40%)`
                     }}
-                  >
-                    <div 
-                      className="absolute inset-0" 
-                      style={{ 
-                        background: `linear-gradient(135deg, ${todaysMood?.color || '#778D5E'}10, transparent 40%)` 
-                      }}
-                    ></div>
+                  ></div>
                     <div className="space-y-4">
-                      <p className="text-[#0C0907]/80 text-base font-medium relative z-10 font-cooper">
-                        Tracking your emotional state helps you understand patterns and gain valuable self-insights over time.
-                      </p>
-                      
-                      <div className="w-full h-px bg-[#0C0907]/10"></div>
-                      
-                      <div 
-                        className="relative z-10 transition-all duration-500 text-center"
-                        style={{ 
-                          opacity: confirmationAnimating ? 0 : 1,
-                          transform: confirmationAnimating ? 'translateY(10px)' : 'translateY(0)'
-                        }}
-                      >
-                        {/* Display the user's reason if available */}
-                        <span className="text-[#5A5A58] font-medium font-cooper tracking-wide text-[15px] relative inline-block">
-                          {(() => {
+                     {/* Display the user's reason if available */}
+                     <span className="text-[#5A5A58] font-medium font-cooper tracking-wide text-[15px] relative inline-block text-center w-full">
+                          {isAuthenticated && user ? todayMoodReason : (() => {
                             try {
                               const entries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
                               const today = new Date().setHours(0, 0, 0, 0);
@@ -701,13 +917,26 @@ const DailyMoodTracking = () => {
                               if (todayEntry && todayEntry.reason) {
                                 return todayEntry.reason;
                               }
-                              return "Return tomorrow to continue";
+                              return "No reason specified";
                             } catch (error) {
-                              return "Return tomorrow to continue";
+                              return "No reason specified";
                             }
                           })()}
-                          <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#5A5A58]/30 rounded-full"></span>
                         </span>
+                      
+                      <div className="w-full h-px bg-[#0C0907]/10"></div>
+                      
+                      <div 
+                        className="relative z-10 transition-all duration-500 text-center"
+                        style={{ 
+                          opacity: confirmationAnimating ? 0 : 1,
+                          transform: confirmationAnimating ? 'translateY(10px)' : 'translateY(0)'
+                        }}
+                      >
+          <p className="text-[#0C0907]/80 text-base font-medium relative z-10 font-cooper">
+                    Tracking your emotional state helps you understand patterns and gain valuable self-insights over time.
+                  </p>
+                        
                       </div>
                     </div>
                   </div>
@@ -785,9 +1014,15 @@ const DailyMoodTracking = () => {
             ) : (
               <div className="space-y-6">
                 <div 
-                  className="rounded-xl mb-4 sm:mb-6 p-5 sm:p-6 text-center"
+                  className="rounded-xl mb-4 sm:mb-6 p-5 sm:p-6 text-center relative"
                   style={{ backgroundColor: '#F0EFEB' }}
                 >
+                  <div 
+                    className="absolute top-0 left-0 right-0 h-1.5 rounded-t-xl"
+                    style={{
+                      background: 'linear-gradient(to right, #DA7A59, #D9C69C, #778D5E)'
+                    }}
+                  ></div>
                   <h2 className="text-xl sm:text-2xl font-medium mb-3 font-cooper">How are you feeling today?</h2>
                   <p className="text-sm sm:text-base text-[#0C0907]/70">Press and hold to confirm your selection</p>
                 </div>
@@ -936,10 +1171,24 @@ const DailyMoodTracking = () => {
             </div>
             <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">Insights</span>
           </Link>
+          
+          <Link 
+            href="/account" 
+            className="flex flex-col items-center relative group"
+          >
+            <div className="absolute inset-x-0 -top-3 h-0.5 bg-transparent opacity-0 rounded-b-md transition-all duration-300 group-hover:opacity-100 group-hover:bg-[#5A5A58]"></div>
+            <div className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 hover:bg-white group-hover:shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0C0907]/60 group-hover:text-[#5A5A58]">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
         </div>
+            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">Account</span>
+          </Link>
+      </div>
       </div>
 
-      {/* Reason Input Overlay */}
+      {/* Reason Input Overlay - Modified to show only Cancel and Save for guests */}
       {showReasonInput && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-[#0C0907]/60 animate-fade-in">
           <div className="w-full max-w-md bg-[#F7F6F3] rounded-xl p-6 shadow-lg">
@@ -982,16 +1231,36 @@ const DailyMoodTracking = () => {
               >
                 Cancel
               </button>
-              <button
-                className="px-6 py-2 bg-[#8A8BDE] text-white rounded-md hover:bg-[#8A8BDE]/90 transition-colors"
-                onClick={saveMoodEntry}
-              >
-                Save
-              </button>
+              
+              {isAuthenticated ? (
+                <button
+                  className="px-6 py-2 bg-[#8A8BDE] text-white rounded-md hover:bg-[#8A8BDE]/90 transition-colors active:scale-95"
+                  onClick={saveMoodEntry}
+                >
+                  Save
+                </button>
+              ) : (
+                <div className="flex space-x-2">
+                  <button
+                    className="px-6 py-2 bg-[#8A8BDE] text-white rounded-md hover:bg-[#8A8BDE]/90 transition-colors active:scale-95"
+                    onClick={() => saveMoodEntry()}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        initialMode="signup"
+        afterAuth={handleAfterAuth}
+      />
 
       {/* Breathing Exercise Modal - IMPROVED DESIGN */}
       {showBreathingExercise && (

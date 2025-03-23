@@ -1,4 +1,5 @@
 import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata = {
   title: 'Pirca | Mood Tracking',
@@ -21,9 +22,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        <div className="min-h-screen bg-background antialiased">
-          {children}
-        </div>
+        <AuthProvider>
+          <div className="min-h-screen bg-background antialiased">
+            {children}
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

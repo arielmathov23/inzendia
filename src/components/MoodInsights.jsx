@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import supabase from '@/lib/supabase';
 
 // Custom styles for irregular shapes
 const customStyles = `
@@ -26,15 +28,44 @@ const MoodInsights = () => {
   const [moodEntries, setMoodEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month'); // 'week', 'month', or 'year'
+  
+  const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
     loadMoodData();
-  }, []);
+  }, [isAuthenticated, user]);
 
-  const loadMoodData = () => {
+  const loadMoodData = async () => {
+    setLoading(true);
     try {
-      const storedEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
-      setMoodEntries(storedEntries);
+      // Load from Supabase for authenticated users
+      if (isAuthenticated && user) {
+        const { data, error } = await supabase
+          .from('mood_entries')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', { ascending: false });
+          
+        if (error) throw error;
+        
+        // Transform Supabase data to match the local format
+        const formattedEntries = data.map(entry => ({
+          mood: {
+            value: entry.mood_value,
+            label: entry.mood_label,
+            color: entry.mood_color
+          },
+          reason: entry.reason,
+          date: new Date(entry.date).toISOString()
+        }));
+        
+        setMoodEntries(formattedEntries);
+      } 
+      // Load from localStorage for anonymous users
+      else {
+        const storedEntries = JSON.parse(localStorage.getItem('moodEntries') || '[]');
+        setMoodEntries(storedEntries);
+      }
     } catch (error) {
       console.error('Error loading mood data:', error);
       setMoodEntries([]);
@@ -133,20 +164,22 @@ const MoodInsights = () => {
 
   const renderEmptyState = () => (
     <div className="flex flex-col items-center justify-center py-16 text-center bg-[#F0EFEB] rounded-xl shadow-sm px-8">
-      <div className="w-24 h-24 irregular-blob-high bg-white flex items-center justify-center mb-8 shadow-sm">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-14 w-14 text-[#0C0907]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      <div className="w-28 h-28 rounded-full bg-white/80 flex items-center justify-center mb-8 shadow-md animate-float">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-16 h-16 text-[#5A5A58]">
+          <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
+          <path d="M20 2a10 10 0 0 0-10 10"></path>
+          <path d="M16 2a10 10 0 0 0-10 10"></path>
         </svg>
       </div>
-      <h3 className="text-2xl font-medium mb-4 text-[#0C0907] font-cooper">No mood data yet</h3>
+      <h3 className="text-2xl font-medium mb-4 text-[#0C0907] font-cooper">No Insights Yet</h3>
       <p className="text-base text-[#0C0907]/70 mb-8 max-w-xs leading-relaxed">
         Start tracking your mood daily to see patterns, trends, and insights about your emotional well-being
       </p>
       <Link 
         href="/mood-tracking" 
-        className="inline-flex items-center justify-center py-3 px-8 bg-[#5A5A58] text-white rounded-full font-medium transition-colors hover:bg-[#5A5A58]/90 font-cooper text-base"
+        className="inline-flex items-center justify-center py-3 px-8 bg-[#5A5A58] text-white rounded-full font-medium transition-colors hover:bg-[#5A5A58]/90 font-cooper text-base shadow-sm"
       >
-        Start Tracking Today
+        Track Your First Mood
       </Link>
     </div>
   );
@@ -176,21 +209,21 @@ const MoodInsights = () => {
         <div className="mb-8">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-2xl font-medium text-[#0C0907] font-cooper">Mood Summary</h3>
-            <div className="flex rounded-full overflow-hidden" style={{ backgroundColor: '#F0EFEB' }}>
+            <div className="flex rounded-lg overflow-hidden bg-white/60 backdrop-blur-sm p-1">
               <button 
-                className={`py-2 px-5 text-base font-medium ${period === 'week' ? 'bg-[#5A5A58] text-white' : 'text-[#0C0907]'} font-cooper`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${period === 'week' ? 'bg-[#8A8BDE] text-white' : 'text-[#0C0907]/70 hover:bg-[#0C0907]/5'}`}
                 onClick={() => setPeriod('week')}
               >
                 Week
               </button>
               <button 
-                className={`py-2 px-5 text-base font-medium ${period === 'month' ? 'bg-[#5A5A58] text-white' : 'text-[#0C0907]'} font-cooper`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${period === 'month' ? 'bg-[#8A8BDE] text-white' : 'text-[#0C0907]/70 hover:bg-[#0C0907]/5'}`}
                 onClick={() => setPeriod('month')}
               >
                 Month
               </button>
               <button 
-                className={`py-2 px-5 text-base font-medium ${period === 'year' ? 'bg-[#5A5A58] text-white' : 'text-[#0C0907]'} font-cooper`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${period === 'year' ? 'bg-[#8A8BDE] text-white' : 'text-[#0C0907]/70 hover:bg-[#0C0907]/5'}`}
                 onClick={() => setPeriod('year')}
               >
                 Year
@@ -225,7 +258,7 @@ const MoodInsights = () => {
             <div className="rounded-xl p-6 bg-[#F0EFEB] h-full">
               <h4 className="text-lg font-cooper mb-4">Current Streak</h4>
               <div className="flex items-center">
-                <div className="w-16 h-16 rounded-full bg-[#F7F6F3] border-4 border-[#778D5E] flex items-center justify-center shadow-sm">
+                <div className="w-16 h-16 rounded-full bg-[#F7F6F3] border-4 border-[#8A8BDE] flex items-center justify-center shadow-sm">
                   <span className="text-2xl font-cooper text-[#0C0907]">{currentStreak}</span>
                 </div>
                 <div className="ml-6">
@@ -285,29 +318,27 @@ const MoodInsights = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-6 pb-20" style={{ backgroundColor: '#E5E4E0' }}>
-      {/* Add custom styles */}
+    <div className="flex flex-col items-center justify-start min-h-screen p-4 pb-20 sm:p-6" style={{ backgroundColor: '#E5E4E0' }}>
+      {/* Custom styles */}
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
       
-      <div className="w-full max-w-3xl">
-        <header className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Mood Insights</h1>
-            <p className="text-base text-[#0C0907]/70 mt-1">Understand your emotional patterns</p>
-          </div>
+      <div className="w-full max-w-md md:max-w-2xl mx-auto">
+        <header className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#0C0907] font-cooper">Mood Insights</h1>
+          <p className="text-sm sm:text-base text-[#0C0907]/70 mt-1">Understand your emotional patterns</p>
         </header>
-        
+
         {loading ? (
           <div className="flex justify-center items-center h-60">
-            <div className="loader"></div>
+            <div className="w-8 h-8 border-2 border-[#5A5A58] border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : (
-          moodEntries.length === 0 ? renderEmptyState() : renderInsights()
+          renderInsights()
         )}
       </div>
       
-      {/* Updated bottom nav bar with improved design */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#F7F6F3] px-6 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0] z-30">
+      {/* Updated bottom nav bar with improved design and 4 options */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#F7F6F3] px-4 py-3 shadow-md rounded-t-2xl border-t border-[#E5E4E0]">
         <div className="flex justify-around max-w-md mx-auto">
           <Link 
             href="/mood-tracking" 
@@ -324,7 +355,7 @@ const MoodInsights = () => {
                 <line x1="20" y1="12" x2="20.01" y2="12"></line>
               </svg>
             </div>
-            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">Track</span>
+            <span className="mt-0.5 text-[12px] sm:text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">Track</span>
           </Link>
           
           <Link 
@@ -337,7 +368,7 @@ const MoodInsights = () => {
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
               </svg>
             </div>
-            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">History</span>
+            <span className="mt-0.5 text-[12px] sm:text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">History</span>
           </Link>
           
           <Link 
@@ -352,7 +383,21 @@ const MoodInsights = () => {
                 <path d="M16 2a10 10 0 0 0-10 10"></path>
               </svg>
             </div>
-            <span className="mt-0.5 text-[13px] font-medium font-cooper text-[#5A5A58]">Insights</span>
+            <span className="mt-0.5 text-[12px] sm:text-[13px] font-medium font-cooper text-[#5A5A58]">Insights</span>
+          </Link>
+          
+          <Link 
+            href="/account" 
+            className="flex flex-col items-center relative group"
+          >
+            <div className="absolute inset-x-0 -top-3 h-0.5 bg-transparent opacity-0 rounded-b-md transition-all duration-300 group-hover:opacity-100 group-hover:bg-[#5A5A58]"></div>
+            <div className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 hover:bg-white group-hover:shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#0C0907]/60 group-hover:text-[#5A5A58]">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </div>
+            <span className="mt-0.5 text-[12px] sm:text-[13px] font-medium font-cooper text-[#0C0907]/60 group-hover:text-[#5A5A58]">Account</span>
           </Link>
         </div>
       </div>
