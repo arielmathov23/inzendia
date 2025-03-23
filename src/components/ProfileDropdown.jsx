@@ -7,6 +7,7 @@ const ProfileDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const { user, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -23,8 +24,21 @@ const ProfileDropdown = () => {
   }, []);
   
   const handleSignOut = async () => {
-    const { success } = await signOut();
-    if (success) {
+    try {
+      setSigningOut(true);
+      const { success, error } = await signOut();
+      
+      if (!success) {
+        console.error('Error signing out:', error);
+        setSigningOut(false);
+        // Even if there's an error, we'll close the dropdown
+        setIsOpen(false);
+      }
+      // No need to handle the success case as the page will reload
+      
+    } catch (error) {
+      console.error('Unexpected error during sign out:', error);
+      setSigningOut(false);
       setIsOpen(false);
     }
   };
@@ -54,13 +68,14 @@ const ProfileDropdown = () => {
           <div className="py-1">
             <button
               onClick={handleSignOut}
+              disabled={signingOut}
               className="w-full text-left px-4 py-2 text-sm text-[#0C0907]/70 hover:bg-[#F7F6F3] transition-colors"
             >
               <div className="flex items-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-[#0C0907]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                Sign Out
+                {signingOut ? 'Signing out...' : 'Sign Out'}
               </div>
             </button>
           </div>

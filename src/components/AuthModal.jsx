@@ -91,12 +91,21 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'signup', afterAuth }) => {
     
     try {
       const { success, error } = await signInWithGoogle();
+      
       if (!success) {
         setError(error || 'Failed to sign in with Google. Please try again.');
         setLoading(false);
       }
-      // Note: Successful Google sign-in will redirect to the callback URL,
-      // so we don't need to handle success here
+      
+      // Only keep loading state active for 10 seconds to prevent UI getting stuck
+      // in case redirect doesn't happen
+      const timeoutId = setTimeout(() => {
+        setLoading(false);
+        setError('Sign-in is taking longer than expected. Please try again.');
+      }, 10000);
+      
+      // Clear timeout if component unmounts
+      return () => clearTimeout(timeoutId);
     } catch (error) {
       setError('An unexpected error occurred. Please try again.');
       console.error('Google auth error:', error);

@@ -25,16 +25,15 @@ const MoodTrackingConfirmation = () => {
             .from('mood_entries')
             .select('*')
             .eq('user_id', user.id)
-            .eq('date', formattedDate)
-            .single();
+            .eq('date', formattedDate);
             
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             setTodaysMood({
-              value: data.mood_value,
-              label: data.mood_label,
-              color: data.mood_color
+              value: data[0].mood_value,
+              label: data[0].mood_label,
+              color: data[0].mood_color
             });
-            setTodaysMoodReason(data.reason);
+            setTodaysMoodReason(data[0].reason);
             return;
           }
         }

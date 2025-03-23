@@ -14,6 +14,7 @@ export default function AccountPage() {
   const [userTimezone, setUserTimezone] = useState('');
   const [savingTimezone, setSavingTimezone] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
   
   useEffect(() => {
     // Get user's browser timezone
@@ -31,17 +32,16 @@ export default function AccountPage() {
       const { data, error } = await supabase
         .from('user_profiles')
         .select('timezone')
-        .eq('id', user.id)
-        .single();
+        .eq('id', user.id);
         
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error fetching user profile:', error);
         return;
       }
       
-      if (data && data.timezone) {
-        setUserTimezone(data.timezone);
-        setTimezone(data.timezone);
+      if (data && data.length > 0 && data[0].timezone) {
+        setUserTimezone(data[0].timezone);
+        setTimezone(data[0].timezone);
       }
     } catch (error) {
       console.error('Error fetching user timezone:', error);
@@ -80,9 +80,19 @@ export default function AccountPage() {
   };
   
   const handleSignOut = async () => {
-    setLoading(true);
-    const { success } = await signOut();
-    setLoading(false);
+    try {
+      setSigningOut(true);
+      const { success, error } = await signOut();
+      
+      if (!success) {
+        console.error('Error signing out:', error);
+        setSigningOut(false);
+      }
+      // No need to set signingOut to false on success as the page will reload
+    } catch (error) {
+      console.error('Unexpected error during sign out:', error);
+      setSigningOut(false);
+    }
   };
   
   return (
@@ -186,12 +196,10 @@ export default function AccountPage() {
               <div className="border-t border-[#E5E4E0] pt-6 mt-6">
                 <button
                   onClick={handleSignOut}
-                  disabled={loading}
-                  className={`w-full py-2.5 rounded-lg font-medium transition-colors text-[#5A5A58] ${
-                    loading ? 'opacity-70' : 'opacity-100'
-                  } bg-[#F7F6F3] hover:bg-[#E5E4E0] text-sm`}
+                  disabled={signingOut}
+                  className="w-full py-3 text-red-600 rounded-xl font-medium border border-red-200 hover:bg-red-50/50 transition-colors"
                 >
-                  {loading ? 'Signing out...' : 'Sign Out'}
+                  {signingOut ? 'Signing out...' : 'Sign Out'}
                 </button>
               </div>
             </div>

@@ -26,7 +26,10 @@ export function AuthProvider({ children }) {
     // Check for active session on initial load
     const checkUser = async () => {
       try {
+        console.log('Checking initial session...');
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('Initial session check result:', !!session);
+        
         setUser(session?.user || null);
         
         // If user is logged in, ensure their profile has the email
@@ -45,6 +48,8 @@ export function AuthProvider({ children }) {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, !!session);
+        
         setUser(session?.user || null);
         
         // If user is logged in, ensure their profile has the email
@@ -76,37 +81,26 @@ export function AuthProvider({ children }) {
       const { data: profile, error: fetchError } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('id', userId)
-        .single();
+        .eq('id', userId);
       
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        // Error other than "not found"
+      if (fetchError) {
+        // Error fetching profile
         console.error('Error fetching user profile:', fetchError);
         return;
       }
       
-      if (!profile) {
-        // Create profile if it doesn't exist
+      if (!profile || profile.length === 0) {
+        // Create profile if it doesn't exist - using upsert instead of insert to handle potential conflicts
         const { error: createError } = await supabase
           .from('user_profiles')
-          .insert([{ 
+          .upsert([{ 
             id: userId,
             display_name: email.split('@')[0],
             email: email
-          }]);
+          }], { onConflict: 'id' });
         
         if (createError) {
           console.error('Error creating user profile:', createError);
-        }
-      } else if (!profile.email) {
-        // Update profile if email is missing
-        const { error: updateError } = await supabase
-          .from('user_profiles')
-          .update({ email: email })
-          .eq('id', userId);
-        
-        if (updateError) {
-          console.error('Error updating user profile with email:', updateError);
         }
       }
     } catch (error) {
@@ -124,17 +118,17 @@ export function AuthProvider({ children }) {
       
       if (error) throw error;
       
-      // Create user profile after successful signup
+      // Create user profile after successful signup - using upsert to handle potential conflicts
       if (data?.user?.id) {
         const { error: profileError } = await supabase
           .from('user_profiles')
-          .insert([
+          .upsert([
             { 
               id: data.user.id,
               display_name: email.split('@')[0], // Default display name from email
               email: email // Store email in user_profiles table
             }
-          ]);
+          ], { onConflict: 'id' });
         
         if (profileError) {
           console.error('Error creating user profile:', profileError);
@@ -143,6 +137,15 @@ export function AuthProvider({ children }) {
         // Also store email in session data for immediate access
         if (data.session) {
           data.session.email = email;
+          
+          // Update user state immediately to trigger UI updates
+          setUser(data.user);
+        }
+        
+        // Refresh the session to ensure all data is up to date
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData?.user) {
+          setUser(refreshData.user);
         }
       }
       
@@ -167,10 +170,9 @@ export function AuthProvider({ children }) {
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('email')
-          .eq('id', data.user.id)
-          .single();
+          .eq('id', data.user.id);
         
-        if (!profileError && (!profile.email || profile.email === null)) {
+        if (!profileError && profile && profile.length > 0 && (!profile[0].email || profile[0].email === null)) {
           // Update the profile with the email used to sign in
           const { error: updateError } = await supabase
             .from('user_profiles')
@@ -192,15 +194,30 @@ export function AuthProvider({ children }) {
   // Sign out
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      console.log('Signing out...');
       
       // Clear temp mood data on sign out
       localStorage.removeItem('tempMoodData');
       setTempMoodData(null);
       
+      // Clear user state immediately
+      setUser(null);
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error during signOut:', error);
+        throw error;
+      }
+      
+      console.log('Sign out successful, will reload page');
+      
+      // Force full page navigation to root to completely reset app state
+      window.location.href = '/';
+      
       return { success: true };
     } catch (error) {
+      console.error('Error signing out:', error);
       return { success: false, error: error.message };
     }
   };
@@ -208,6 +225,9 @@ export function AuthProvider({ children }) {
   // Sign in with Google
   const signInWithGoogle = async () => {
     try {
+      // Clear any existing sessions first to prevent login issues
+      await supabase.auth.signOut();
+      
       // Save any current temp mood data to localStorage before redirect
       if (tempMoodData) {
         localStorage.setItem('tempMoodData', JSON.stringify(tempMoodData));
@@ -216,13 +236,24 @@ export function AuthProvider({ children }) {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            // Always prompt for account selection
+            prompt: 'select_account',
+            // Request offline access to get refresh token
+            access_type: 'offline'
+          }
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Google sign-in error:', error);
+        throw error;
+      }
+      
       return { success: true, data };
     } catch (error) {
+      console.error('Failed to sign in with Google:', error);
       return { success: false, error: error.message };
     }
   };

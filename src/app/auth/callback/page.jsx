@@ -31,7 +31,13 @@ export default function AuthCallbackPage() {
       if (code) {
         try {
           // Exchange code for session
-          await supabase.auth.exchangeCodeForSession(code);
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error('Error exchanging code for session:', error);
+            router.push('/auth/error');
+            return;
+          }
           
           // Use either context tempMoodData or localStorage tempMoodData
           const moodData = tempMoodData || localTempMoodData;
@@ -61,22 +67,42 @@ export default function AuthCallbackPage() {
       }
     };
 
-    if (localTempMoodData || tempMoodData) {
-      handleAuthCallback();
-    }
+    // Always run the auth callback handler if code is present, regardless of mood data
+    const runCallback = async () => {
+      const { searchParams } = new URL(window.location.href);
+      const code = searchParams.get('code');
+      
+      if (code) {
+        await handleAuthCallback();
+      } else if (localTempMoodData || tempMoodData) {
+        // Only run without code if there's mood data
+        handleAuthCallback();
+      }
+    };
+    
+    runCallback();
+    
   }, [router, tempMoodData, localTempMoodData]);
 
+  // Fallback timeout - reduced to 2 seconds for quicker handling
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      // If nothing happens after 3 seconds, try to proceed anyway
+      // If nothing happens after 2 seconds, try to proceed anyway
       const { searchParams } = new URL(window.location.href);
       const code = searchParams.get('code');
       
       if (code) {
         const exchangeCodeAndRedirect = async () => {
           try {
-            await supabase.auth.exchangeCodeForSession(code);
-            router.push('/mood-tracking');
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) {
+              console.error('Error exchanging code in fallback:', error);
+              router.push('/auth/error');
+              return;
+            }
+            
+            // Force a page reload to ensure auth state is updated completely
+            window.location.href = '/mood-tracking';
           } catch (error) {
             console.error('Error in fallback auth handler:', error);
             router.push('/auth/error');
@@ -87,7 +113,7 @@ export default function AuthCallbackPage() {
       } else {
         router.push('/mood-tracking');
       }
-    }, 3000);
+    }, 2000);
     
     return () => clearTimeout(timeoutId);
   }, [router]);
